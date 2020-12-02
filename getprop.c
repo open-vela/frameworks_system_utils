@@ -30,8 +30,8 @@ int main(int argc, char* argv[])
         property_list(callback, NULL);
     } else if (argc == 2) {
         int ret = property_get(argv[1], buf, "");
-        if (ret < 0)
-            printf("Returned %d\n", ret);
+        if (ret == 0)
+            printf("Get value failed\n");
         else
             printf("%s\n", buf);
     } else
