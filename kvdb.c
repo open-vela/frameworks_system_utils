@@ -315,7 +315,7 @@ int property_delete(const char* key)
  *   void* cookie: cookie data to pass to callback function
  *
  * Returned Value:
- *   Returns 0 on success, <0 otherwise.
+ *   Returns 0 on success, <0 if all databases failed to open.
  *
  ****************************************************************************/
 
@@ -324,27 +324,35 @@ int property_list(
     void* cookie)
 {
     callback_data data = { fn, cookie, 0, 0 };
-
+    int fail_count = 0;
     for (int type = 0; type < sizeof(databases) / sizeof(struct database);
          type++) {
         unqlite* db;
         unqlite_kv_cursor* cur;
         int rc = database_open(&db, databases[type].prefix);
         if (rc < 0)
+          {
+            fail_count++;
             continue;
+          }
 
         /* Allocate a new cursor instance */
 
         rc = unqlite_kv_cursor_init(db, &cur);
         if (rc < 0) {
             _err("Out of memory %d\n", rc);
-            unqlite_close(db);
-            continue;
+            fail_count++;
+            goto release_db;
         }
 
         /* Point to the first record */
 
-        unqlite_kv_cursor_first_entry(cur);
+        rc = unqlite_kv_cursor_first_entry(cur);
+        if (rc < 0)
+          {
+            fail_count++;
+            goto release_all;
+          }
 
         /* Iterate over the entries */
 
@@ -361,11 +369,13 @@ int property_list(
         }
 
         /* Finally, Release our cursor */
-
+release_all:
         unqlite_kv_cursor_release(db, cur);
+release_db:
         unqlite_close(db);
     }
-    return 0;
+    return fail_count < sizeof(databases) / sizeof(struct database) ?
+           0 : -ENOSPC;
 }
 
 /****************************************************************************
