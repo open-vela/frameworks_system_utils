@@ -41,11 +41,9 @@ typedef struct callback_data {
 static const struct database {
     const char* prefix;
     const char* path;
-    const char* defaults;
 } databases[] = {
-    { "ram.", CONFIG_KVDB_RAM_PATH, CONFIG_KVDB_RAM_SRC },
-    { "persist.", CONFIG_KVDB_PST_PATH, CONFIG_KVDB_PST_SRC },
-    { NULL, CONFIG_KVDB_DAT_PATH, CONFIG_KVDB_DAT_SRC }
+    { "persist.", CONFIG_KVDB_DAT_PATH },
+    { NULL, CONFIG_KVDB_RAM_PATH }
 };
 
 /****************************************************************************
@@ -55,7 +53,8 @@ static const struct database {
 static int database_open(unqlite** db, const char* key);
 static int database_key_callback(const void* value, size_t len, void* usr);
 static int database_data_callback(const void* value, size_t len, void* usr);
-static int property_load(const char* filename, unqlite* db);
+static bool key_has_prefix(const char* key);
+static int property_load(const char* prefix, unqlite* db);
 
 /****************************************************************************
  * Name: database_open
@@ -91,8 +90,8 @@ static int database_open(unqlite** db, const char* key)
         _err("Failed to open database %d\n", rc);
         return rc;
     }
-    if (load_defaults && access(databases[type].defaults, F_OK) == 0)
-        return property_load(databases[type].defaults, *db);
+    if (load_defaults && access(CONFIG_KVDB_SRC_PATH, F_OK) == 0)
+        return property_load(databases[type].prefix, *db);
     return 0;
 }
 
@@ -152,13 +151,37 @@ static int database_data_callback(const void* value, size_t len, void* usr)
 }
 
 /****************************************************************************
+ * Name: key_has_prefix
+ *
+ * Description:
+ *   Iterate over databases to see if any database prefix matches key prefix
+ *
+ * Input Parameters:
+ *   const char* key: name of the key to be parsed
+ *
+ * Returned Value:
+ *   On success return true.
+ *   Returns false if not matched.
+ *
+ ****************************************************************************/
+static bool key_has_prefix(const char* key)
+{
+    for (int type = 0; databases[type].prefix; type++) {
+        if (!strncmp(key, databases[type].prefix, strlen(databases[type].prefix)))
+            return true;
+    }
+
+    return false;
+}
+
+/****************************************************************************
  * Name: property_load
  *
  * Description:
  *   Read default KVs from a text file, parse and write the KVs to database
  *
  * Input Parameters:
- *   const char* filename: name of the file to be loaded
+ *   const char* prefix: name of the database prefix to be loaded
  *   unqlite *db: pointer to the target database
  *
  * Returned Value:
@@ -170,11 +193,11 @@ static int database_data_callback(const void* value, size_t len, void* usr)
  *
  ****************************************************************************/
 
-static int property_load(const char* filename, unqlite* db)
+static int property_load(const char* prefix, unqlite* db)
 {
-    FILE* f = fopen(filename, "r");
+    FILE* f = fopen(CONFIG_KVDB_SRC_PATH, "r");
     if (!f) {
-        _err("Error opening file '%s'\n", filename);
+        _err("Error opening file '%s'\n", CONFIG_KVDB_SRC_PATH);
         return -errno;
     }
     size_t buflen = PROP_VALUE_MAX << 1; //Maybe not enough
@@ -185,10 +208,13 @@ static int property_load(const char* filename, unqlite* db)
         char *key = strtok_r(buf, "=", &saveptr);
         char *value = strtok_r(NULL, "\n", &saveptr);
         if (value != NULL) {
-            int rc = unqlite_kv_store(db, key, strlen(key) + 1,
-                                          value, strlen(value) + 1);
-            if (rc < 0)
-                _err("Load value failed %d\n", rc);
+            if((prefix == NULL && !key_has_prefix(key)) ||
+               (prefix && !strncmp(key, prefix, strlen(prefix)))) {
+                int rc = unqlite_kv_store(db, key, strlen(key) + 1,
+                                              value, strlen(value) + 1);
+                if (rc < 0)
+                    _err("Load value failed %d\n", rc);
+            }
         }
     }
     fclose(f);
