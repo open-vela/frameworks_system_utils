@@ -18,6 +18,7 @@ config KVDB
 	tristate "key-value database"
 	default n
 	select UNQLITE
+
 if KVDB
 
 config KVDB_PRIORITY
@@ -28,28 +29,16 @@ config KVDB_STACKSIZE
 	int "stack size"
 	default DEFAULT_TASK_STACKSIZE
 
-config KVDB_PST_PATH
-	string "system persistent database path"
-	default "/persist/kv.db"
-
-config KVDB_PST_SRC
-	string "system database default value source"
-	default "/etc/persist.prop"
-
 config KVDB_RAM_PATH
 	string "in-memory database path"
 	default "/tmp/kv.db"
 
-config KVDB_RAM_SRC
-	string "in-memory database default value source"
-	default "/etc/ram.prop"
-
 config KVDB_DAT_PATH
-	string "user persistent database path"
+	string "persistent database path"
 	default "/data/kv.db"
 
-config KVDB_DAT_SRC
-	string "user database default value source"
-	default "/etc/data.prop"
+config KVDB_SRC_PATH
+	string "database default value source path"
+	default "/etc/build.prop"
 
 endif # KVDB
