@@ -244,6 +244,12 @@ static int property_load(const char* prefix, unqlite* db)
 
 int property_set(const char* key, const char* value)
 {
+    /* ro.* properties may NEVER be modified once set */
+    if(!strncmp(key, "ro.", 3)) {
+        _err("Read-only prop modified not permitted\n");
+        return -EPERM;
+    }
+
     if (value == NULL)
         return property_delete(key);
     int value_len = strlen(value);
@@ -320,6 +326,12 @@ err_out:
 
 int property_delete(const char* key)
 {
+    /* ro.* properties may NEVER be deleted once set */
+    if(!strncmp(key, "ro.", 3)) {
+        _err("Read-only prop deleted not permitted\n");
+        return -EPERM;
+    }
+
     unqlite* db;
     int rc = database_open(&db, key);
     if (rc < 0)
