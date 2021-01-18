@@ -15,20 +15,23 @@
  */
 
 #include <stdio.h>
+#include <string.h>
 
 #include "kvdb.h"
 
 int main(int argc, char* argv[])
 {
-    if (argc == 3) {
-        int ret = property_set(argv[1], argv[2]);
-        if (ret < 0)
-            printf("Returned %d\n", ret);
-    } else if (argc == 2) {
-        int ret = property_delete(argv[1]);
-        if (ret < 0)
-            printf("Returned %d\n", ret);
-    } else
-        printf("\nUsage: %s <key> [value]\n", argv[0]);
-    return 0;
+    int ret = 0;
+
+    if (argc == 3)
+        ret = -property_set(argv[1], argv[2]);
+    else if (argc == 2)
+        ret = -property_delete(argv[1]);
+    else
+        printf("Usage: %s <key> [value]\n", argv[0]);
+
+    if (ret > 0)
+       printf("Error: %s\n", strerror(ret));
+
+    return ret;
 }

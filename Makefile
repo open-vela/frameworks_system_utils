@@ -16,9 +16,10 @@
 
 include $(APPDIR)/Make.defs
 
-CSRCS     = kvdb.c
-MAINSRC   = setprop.c getprop.c
-PROGNAME  = setprop getprop
+CSRCS     = client.c
+MAINSRC   = server.c setprop.c getprop.c
+PROGNAME  = kvdbd setprop getprop
+
 CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/unqlite}
 
 PRIORITY  = $(CONFIG_KVDB_PRIORITY)
