@@ -14,27 +14,30 @@
  * limitations under the License.
  */
 
+#include <errno.h>
 #include <stdio.h>
 
 #include "kvdb.h"
 
-void callback(const char* name, const char* value, void* cookie)
+static void callback(const char* name, const char* value, void* cookie)
 {
     printf("%s: %s\n", name, value);
 }
 
 int main(int argc, char* argv[])
 {
-    char buf[PROP_VALUE_MAX];
-    if (argc == 1) {
-        property_list(callback, NULL);
-    } else if (argc == 2) {
-        int ret = property_get(argv[1], buf, "");
-        if (ret == 0)
-            printf("Get value failed\n");
-        else
+    int ret = 0;
+
+    if (argc == 2) {
+        char buf[PROP_VALUE_MAX];
+        if (property_get(argv[1], buf, ""))
             printf("%s\n", buf);
-    } else
-        printf("\nUsage: %s [key]\n", argv[0]);
-    return 0;
+        else
+            ret = EINVAL;
+    } else if (argc == 1)
+        ret = -property_list(callback, NULL);
+    else
+        printf("Usage: %s [key]\n", argv[0]);
+
+    return ret;
 }

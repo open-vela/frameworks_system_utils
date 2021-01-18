@@ -29,15 +29,19 @@ config KVDB_STACKSIZE
 	int "stack size"
 	default DEFAULT_TASK_STACKSIZE
 
-config KVDB_RAM_PATH
-	string "in-memory database path"
-	default "/tmp/kv.db"
+config KVDB_COMMIT_INTERVAL
+	int "commit time interval(sec)"
+	default 5
 
-config KVDB_DAT_PATH
+config KVDB_TIMEOUT_INTERVAL
+	int "transaction timeout interval(sec)"
+	default 0
+
+config KVDB_PERSIST_PATH
 	string "persistent database path"
-	default "/data/kv.db"
+	default "/data/persist.db"
 
-config KVDB_SRC_PATH
+config KVDB_SOURCE_PATH
 	string "database default value source path"
 	default "/etc/build.prop"
 
