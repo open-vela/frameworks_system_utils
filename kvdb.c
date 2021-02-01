@@ -292,6 +292,14 @@ int property_get(const char* key, char* value, const char* default_value)
 {
     if (!key)
         goto err_out;
+
+    const char *env = getenv(key);
+    if (env) {
+        strncpy(value, env, PROP_VALUE_MAX - 1);
+        value[PROP_VALUE_MAX - 1] = 0;
+        return strlen(value);
+    }
+
     unqlite* db;
     int rc = database_open(&db, key);
     if (rc < 0)
