@@ -307,14 +307,15 @@ int property_get(const char* key, char* value, const char* default_value)
     int64_t buflen = PROP_VALUE_MAX;
     rc = unqlite_kv_fetch(db, key, strlen(key) + 1, value, &buflen);
     unqlite_close(db);
-    if (rc < 0) {
-        _err("Get value failed %d\n", rc);
+    if (rc < 0)
         goto err_out;
-    }
     return buflen - 1;
 err_out:
-    strcpy(value, default_value);
-    return strlen(default_value);
+    if (default_value) {
+        strncpy(value, default_value, PROP_VALUE_MAX);
+        return strlen(value);
+    }
+    return rc;
 }
 
 /****************************************************************************
