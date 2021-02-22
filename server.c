@@ -22,7 +22,7 @@
 #include <sys/poll.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <time.h>
+#include <sys/time.h>
 
 #include "kvdb.h"
 #include "unqlite.h"
