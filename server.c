@@ -348,7 +348,8 @@ static int kvdb_list_consume(const char* key, size_t key_len,
     msg.msg_iovlen = 3;
 
     int fd = (int)cookie;
-    return sendmsg(fd, &msg, 0);
+    int ret = sendmsg(fd, &msg, 0);
+    return ret > 0 ? 0 : ret;
 }
 
 static void* kvdb_list_thread(void* arg)
