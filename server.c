@@ -243,7 +243,7 @@ static int kvdb_init(unqlite* db[])
     memset(db, 0, sizeof(db[0]) * KVDB_COUNT);
     for (int i = 0; i < KVDB_COUNT; i++) {
         if (path[i][0])
-            ret = unqlite_open(&db[i], path[i], UNQLITE_OPEN_CREATE);
+            ret = unqlite_open(&db[i], path[i], UNQLITE_OPEN_CREATE | UNQLITE_OPEN_OMIT_JOURNALING);
         else
             ret = unqlite_open(&db[i], NULL, UNQLITE_OPEN_IN_MEMORY);
 
