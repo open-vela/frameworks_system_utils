@@ -128,12 +128,12 @@ static int kvdb_get(unqlite* db[], const char* key, size_t key_len, char* value)
     if (i < 0)
         return i;
 
-    unqlite_int64 val_len = PROP_VALUE_MAX;
+    unqlite_int64 val_len = value ? PROP_VALUE_MAX : 0;
     int ret = unqlite_kv_fetch(db[i], key, ++key_len, value, &val_len);
     if (ret < 0)
         return ret;
 
-    if (val_len <= 0 || value[val_len - 1])
+    if (val_len <= 0 || value && value[val_len - 1])
         return -EINVAL;
 
     return val_len;
@@ -237,16 +237,14 @@ static int kvdb_init(unqlite* db[])
         [KVDB_PERSIST] = CONFIG_KVDB_PERSIST_PATH,
     };
 
-    bool loaded[KVDB_COUNT] = {false};
     int ret = 0;
 
     /* open database */
     memset(db, 0, sizeof(db[0]) * KVDB_COUNT);
     for (int i = 0; i < KVDB_COUNT; i++) {
-        if (path[i][0]) {
-            loaded[i] = access(path[i], F_OK) >= 0;
+        if (path[i][0])
             ret = unqlite_open(&db[i], path[i], UNQLITE_OPEN_CREATE);
-        } else
+        else
             ret = unqlite_open(&db[i], NULL, UNQLITE_OPEN_IN_MEMORY);
 
         if (ret < 0)
@@ -273,10 +271,11 @@ static int kvdb_init(unqlite* db[])
         if (i < 0)
             continue;
 
-        if (loaded[i])
+        size_t key_len = strlen(key) + 1;
+        if (kvdb_get(db, key, key_len, NULL) >= 0)
             continue;
 
-        kvdb_set(db, key, strlen(key) + 1, value, strlen(value) + 1);
+        kvdb_set(db, key, key_len, value, strlen(value) + 1);
     }
 
     fclose(f);
