@@ -279,6 +279,8 @@ static int kvdb_init(unqlite* db[])
     }
 
     fclose(f);
+    kvdb_commit(db);
+
     return 0;
 
 out:
