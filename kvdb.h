@@ -22,7 +22,7 @@
 #define PROP_KEY_MAX     100
 #define PROP_VALUE_MAX   100
 #define PROP_MSG_MAX     (3 + PROP_KEY_MAX + PROP_VALUE_MAX) /* +3 = +1(opcode) +2(len) */
-#define PROP_SERVER_PATH "/kvdbd"
+#define PROP_SERVER_PATH "kvdbd"
 
 #if defined(__cplusplus)
 extern "C"

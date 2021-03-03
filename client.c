@@ -25,6 +25,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/time.h>
+#include <netpacket/rpmsg.h>
 
 #include "kvdb.h"
 
@@ -49,7 +50,11 @@
 
 static int property_connect(void)
 {
+#ifdef CONFIG_KVDB_REMOTE_SERVER
+    int fd = socket(AF_RPMSG, SOCK_STREAM, 0);
+#else
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+#endif
     if (fd < 0)
         return -errno;
 
@@ -62,11 +67,20 @@ static int property_connect(void)
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 #endif
 
-    struct sockaddr_un addr;
-    addr.sun_family = AF_UNIX;
-    strcpy(addr.sun_path, PROP_SERVER_PATH);
+#ifdef CONFIG_KVDB_REMOTE_SERVER
+    struct sockaddr_rpmsg addr = {
+        .rp_family = AF_RPMSG,
+        .rp_name = PROP_SERVER_PATH,
+        .rp_cpu = CONFIG_KVDB_RPMSG_SERVER_NAME,
+    };
+#else
+    struct sockaddr_un addr = {
+        .sun_family = AF_UNIX,
+        .sun_path = PROP_SERVER_PATH,
+    };
+#endif
 
-    int ret = connect(fd, (struct sockaddr*)&addr, sizeof(addr));
+    int ret = connect(fd, (const struct sockaddr*)&addr, sizeof(addr));
     if (ret < 0) {
         ret = -errno;
         close(fd);
@@ -351,8 +365,8 @@ int property_list(property_callback propfn, void* cookie)
          *-------------------------------------*/
 
         char msg[PROP_MSG_MAX];
-        ret = recv(fd, msg, PROP_MSG_MAX, 0);
-        if (ret < 4) {
+        ret = recv(fd, msg, 2, 0);
+        if (ret < 2) {
             if (!--ret && !msg[0])
                 break; /* end the list */
             ret = ret < -1 ? -errno : -EINVAL;
@@ -367,7 +381,8 @@ int property_list(property_callback propfn, void* cookie)
         if (--val_len >= PROP_VALUE_MAX)
             continue;
 
-        if (ret != 4 + key_len + val_len)
+        ret = recv(fd, msg + 2, msg[0] + msg[1], 0);
+        if (ret != msg[0] + msg[1])
             continue;
 
         const char* key   = msg + 2;
