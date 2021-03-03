@@ -17,8 +17,13 @@
 include $(APPDIR)/Make.defs
 
 CSRCS     = client.c
-MAINSRC   = server.c setprop.c getprop.c
-PROGNAME  = kvdbd setprop getprop
+MAINSRC   = setprop.c getprop.c
+PROGNAME  = setprop getprop
+
+ifeq ($(CONFIG_KVDB_REMOTE_SERVER),)
+MAINSRC   += server.c
+PROGNAME  += kvdbd
+endif
 
 CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/unqlite}
 

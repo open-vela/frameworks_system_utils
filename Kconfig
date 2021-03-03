@@ -29,13 +29,24 @@ config KVDB_STACKSIZE
 	int "stack size"
 	default DEFAULT_TASK_STACKSIZE
 
-config KVDB_COMMIT_INTERVAL
-	int "commit time interval(sec)"
-	default 5
+config KVDB_REMOTE_SERVER
+	bool "KVDB server is on another CPU"
+	default n
+
+config KVDB_RPMSG_SERVER_NAME
+	string "which cpu kvdb server runs on"
+	depends on KVDB_REMOTE_SERVER
+	default "ap"
 
 config KVDB_TIMEOUT_INTERVAL
 	int "transaction timeout interval(sec)"
 	default 0
+
+if !KVDB_REMOTE_SERVER
+
+config KVDB_COMMIT_INTERVAL
+	int "commit time interval(sec)"
+	default 5
 
 config KVDB_PERSIST_PATH
 	string "persistent database path"
@@ -44,5 +55,7 @@ config KVDB_PERSIST_PATH
 config KVDB_SOURCE_PATH
 	string "database default value source path"
 	default "/etc/build.prop"
+
+endif # !KVDB_REMOTE_SERVER
 
 endif # KVDB

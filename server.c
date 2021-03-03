@@ -23,6 +23,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/time.h>
+#include <netpacket/rpmsg.h>
 
 #include "kvdb.h"
 #include "unqlite.h"
@@ -30,6 +31,10 @@
 #define KVDB_MEM                0
 #define KVDB_PERSIST            1
 #define KVDB_COUNT              2
+
+#define KVFD_LOCAL              0
+#define KVFD_REMOTE             1
+#define KVFD_COUNT              2
 
 /****************************************************************************
  * Database Types
@@ -301,33 +306,58 @@ typedef struct kvdb_list_data {
  * Network Functions
  ****************************************************************************/
 
-static int kvdb_bind(void)
+static int kvdb_bind(int fd[])
 {
-    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (fd < 0)
-        return -errno;
+    const int family[] = {
+        [KVFD_LOCAL]  = AF_UNIX,
+        [KVFD_REMOTE] = AF_RPMSG,
+    };
 
-    struct sockaddr_un addr;
-    addr.sun_family = AF_UNIX;
-    strcpy(addr.sun_path, PROP_SERVER_PATH);
+    const struct sockaddr_un addr0 = {
+        .sun_family = AF_UNIX,
+        .sun_path   = PROP_SERVER_PATH,
+    };
 
-    int ret = bind(fd, (struct sockaddr*)&addr, sizeof(addr));
-    if (ret < 0) {
-        ret = -errno;
-        goto out;
+    const struct sockaddr_rpmsg addr1 = {
+        .rp_family = AF_RPMSG,
+        .rp_cpu    = "",
+        .rp_name   = PROP_SERVER_PATH,
+    };
+
+    const struct sockaddr* addr[] = {
+        [KVFD_LOCAL]  = (const struct sockaddr*)&addr0,
+        [KVFD_REMOTE] = (const struct sockaddr*)&addr1,
+    };
+
+    const socklen_t addrlen[] = {
+        [KVFD_LOCAL]  = sizeof(struct sockaddr_un),
+        [KVFD_REMOTE] = sizeof(struct sockaddr_rpmsg),
+    };
+
+    memset(fd, 0, sizeof(int) * KVFD_COUNT);
+
+    for (int i = 0; i < KVFD_COUNT; i++) {
+        fd[i] = socket(family[i], SOCK_STREAM, 0);
+        if (fd[i] < 0)
+            continue;
+
+        int ret = bind(fd[i], addr[i], addrlen[i]);
+        if (ret < 0)
+            return ret;
+
+        ret = listen(fd[i], SOMAXCONN);
+        if (ret < 0)
+            return ret;
     }
 
-    ret = listen(fd, SOMAXCONN);
-    if (ret < 0) {
-        ret = -errno;
-        goto out;
-    }
+    return 0;
+}
 
-    return fd;
-
-out:
-    close(fd);
-    return ret;
+static void kvdb_unbind(int fd[])
+{
+    for (int i = 0; i < KVFD_COUNT; i++)
+        if (fd[i] > 0)
+            close(fd[i]);
 }
 
 static int kvdb_list_consume(const char* key, size_t key_len,
@@ -441,12 +471,18 @@ out:
     return dirty;
 }
 
-static void kvdb_server(int fd, unqlite* db[])
+static void kvdb_server(int fd[], unqlite* db[])
 {
-    struct pollfd pfd = {
-        .fd      = fd,
-        .events  = POLLIN,
-    };
+    struct pollfd pfd[KVFD_COUNT];
+    int pfd_count = 0;
+    for (int i = 0; i < KVFD_COUNT; i++) {
+        if (fd[i] > 0) {
+            pfd[pfd_count].fd = fd[i];
+            pfd[pfd_count].events = POLLIN;
+            pfd_count++;
+        }
+    }
+
     time_t next = 0;
 
     while (1) {
@@ -463,18 +499,23 @@ static void kvdb_server(int fd, unqlite* db[])
                 timeout *= 1000;
         }
 
-        if (poll(&pfd, 1, timeout) <= 0)
-            continue;
+        int nfds = poll(pfd, pfd_count, timeout);
 
-        int newfd = accept(fd, NULL, NULL);
-        if (newfd < 0)
-            continue;
+        for (int i = 0; nfds > 0; i++) {
+            if ((pfd[i].revents & POLLIN) == 0)
+                continue;
 
-        /* is database changed? */
-        if (kvdb_client(newfd, db) && next == 0) {
-            next = time(NULL) + CONFIG_KVDB_COMMIT_INTERVAL;
-            if (next == 0)
-                next++; /* ensure no zero */
+            nfds--;
+            int newfd = accept(pfd[i].fd, NULL, NULL);
+            if (newfd < 0)
+                continue;
+
+            /* is database changed? */
+            if (kvdb_client(newfd, db) && next == 0) {
+                next = time(NULL) + CONFIG_KVDB_COMMIT_INTERVAL;
+                if (next == 0)
+                    next++; /* ensure no zero */
+            }
         }
     }
 }
@@ -494,12 +535,13 @@ static void kvdb_server(int fd, unqlite* db[])
 
 int main(int argc, char* argv[])
 {
-    int fd = kvdb_bind();
-    if (fd < 0)
-        return -fd;
+    int fd[KVFD_COUNT];
+    int ret = kvdb_bind(fd);
+    if (ret < 0)
+        goto out;
 
     unqlite* db[KVDB_COUNT];
-    int ret = kvdb_init(db);
+    ret = kvdb_init(db);
     if (ret < 0)
         goto out;
 
@@ -507,6 +549,6 @@ int main(int argc, char* argv[])
     kvdb_uninit(db);
 
 out:
-    close(fd);
+    kvdb_unbind(fd);
     return -ret;
 }
