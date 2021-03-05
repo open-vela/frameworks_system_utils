@@ -24,6 +24,11 @@
 #define PROP_MSG_MAX     (3 + PROP_KEY_MAX + PROP_VALUE_MAX) /* +3 = +1(opcode) +2(len) */
 #define PROP_SERVER_PATH "/kvdbd"
 
+#if defined(__cplusplus)
+extern "C"
+{
+#endif
+
 int property_set(const char* key, const char* value);
 int property_get(const char* key, char* value, const char* default_value);
 int property_delete(const char* key);
@@ -37,5 +42,9 @@ int property_set_int32(const char* key, int32_t value);
 int32_t property_get_int32(const char* key, int32_t default_value);
 int property_set_int64(const char* key, int64_t value);
 int64_t property_get_int64(const char* key, int64_t default_value);
+
+#if defined(__cplusplus)
+}
+#endif
 
 #endif
