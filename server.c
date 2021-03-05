@@ -71,7 +71,7 @@ static int kvdb_get_index(const char* key)
 }
 
 static int kvdb_set(unqlite* db[], const char* key, size_t key_len,
-                    const char* value, size_t val_len)
+                    const char* value, size_t val_len, bool force)
 {
     if (--key_len >= PROP_KEY_MAX)
         return -E2BIG;
@@ -85,7 +85,7 @@ static int kvdb_set(unqlite* db[], const char* key, size_t key_len,
     if (value[val_len])
         return -EINVAL;
 
-    if(kvdb_is_readonly(key))
+    if(kvdb_is_readonly(key) && !force)
         return -EPERM;
 
     /* in environment variable? */
@@ -275,7 +275,7 @@ static int kvdb_init(unqlite* db[])
         if (kvdb_get(db, key, key_len, NULL) >= 0)
             continue;
 
-        kvdb_set(db, key, key_len, value, strlen(value) + 1);
+        kvdb_set(db, key, key_len, value, strlen(value) + 1, true);
     }
 
     fclose(f);
@@ -405,7 +405,7 @@ static bool kvdb_client(int fd, unqlite* db[])
             size_t val_len = msg[2];
             const char* key = msg + 3;
             const char* value = key + key_len;
-            int32_t err = kvdb_set(db, key, key_len, value, val_len);
+            int32_t err = kvdb_set(db, key, key_len, value, val_len, false);
             if (err >= 0)
                 dirty = true;
             send(fd, &err, 4, 0);
