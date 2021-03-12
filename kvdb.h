@@ -42,6 +42,7 @@ int property_set_int32(const char* key, int32_t value);
 int32_t property_get_int32(const char* key, int32_t default_value);
 int property_set_int64(const char* key, int64_t value);
 int64_t property_get_int64(const char* key, int64_t default_value);
+int property_commit(void);
 
 #if defined(__cplusplus)
 }

@@ -556,3 +556,27 @@ int64_t property_get_int64(const char* key, int64_t default_value)
 
     return ret;
 }
+
+/****************************************************************************
+ * Name: property_commit
+ *
+ * Description:
+ *   Actively commit all property changes
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   On success returns 0.
+ *   On failure returns -errno.
+ *
+ ****************************************************************************/
+
+int property_commit(void)
+{
+    int fd = property_connect();
+    if (fd < 0)
+        return fd;
+
+    return send(fd, "C", 1, 0) > 0 ? 0 : -errno;
+}
