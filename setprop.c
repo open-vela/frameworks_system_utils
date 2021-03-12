@@ -32,6 +32,8 @@ int main(int argc, char* argv[])
 
     if (ret > 0)
        printf("Error: %s\n", strerror(ret));
+    else
+        property_commit();
 
     return ret;
 }

@@ -429,6 +429,10 @@ static bool kvdb_client(int fd, unqlite* db[])
             pthread_detach(t);
             goto out; /* skip close fd, done in the thread */
         }
+        case 'C': {
+            kvdb_commit(db);
+            break;
+        }
     }
 
     close(fd); /* done, close client socket */
