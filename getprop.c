@@ -16,6 +16,7 @@
 
 #include <errno.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "kvdb.h"
 
@@ -28,7 +29,7 @@ int main(int argc, char* argv[])
 {
     int ret = 0;
 
-    if (argc == 2) {
+    if (argc == 2 && strncmp(argv[1], "-h", 3)) {
         char buf[PROP_VALUE_MAX];
         if (property_get(argv[1], buf, ""))
             printf("%s\n", buf);

@@ -25,7 +25,7 @@ int main(int argc, char* argv[])
 
     if (argc == 3)
         ret = -property_set(argv[1], argv[2]);
-    else if (argc == 2)
+    else if (argc == 2 && strncmp(argv[1], "-h", 3))
         ret = -property_delete(argv[1]);
     else
         printf("Usage: %s <key> [value]\n", argv[0]);
