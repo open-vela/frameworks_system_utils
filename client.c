@@ -118,11 +118,11 @@ int property_set(const char* key, const char* value)
         value = "";
 
     size_t key_len = strlen(key) + 1;
-    if (key_len > PROP_KEY_MAX)
+    if (key_len > PROP_NAME_MAX)
         return -E2BIG;
 
     size_t val_len = strlen(value) + 1;
-    if (val_len > PROP_VALUE_MAX)
+    if (val_len > PROP_NAME_MAX)
         return -E2BIG;
 
     int fd = property_connect();
@@ -188,7 +188,7 @@ out:
  *
  * Returned Value:
  *   On success returns the length of the value which will never be greater
- *   than PROP_VALUE_MAX - 1 and will always be zero terminated.
+ *   than PROP_NAME_MAX - 1 and will always be zero terminated.
  *   (the length does not include the terminating zero).
  *   On failure returns length of default_value.
  *
@@ -200,7 +200,7 @@ int property_get(const char* key, char* value, const char* default_value)
         return -EINVAL;
 
     size_t key_len = strlen(key) + 1;
-    if (key_len > PROP_KEY_MAX)
+    if (key_len > PROP_NAME_MAX)
         goto out;
 
     int fd = property_connect();
@@ -235,7 +235,7 @@ int property_get(const char* key, char* value, const char* default_value)
      |[value'\0']|
      *-----------*/
 
-    int val_len = recv(fd, value, PROP_VALUE_MAX, 0);
+    int val_len = recv(fd, value, PROP_NAME_MAX, 0);
     if (val_len <= 0 || value[--val_len])
         goto out_fd;
 
@@ -272,7 +272,7 @@ int property_delete(const char* key)
         return -EINVAL;
 
     size_t key_len = strlen(key) + 1;
-    if (key_len > PROP_KEY_MAX)
+    if (key_len > PROP_NAME_MAX)
         return -E2BIG;
 
     int fd = property_connect();
@@ -374,11 +374,11 @@ int property_list(property_callback propfn, void* cookie)
         }
 
         size_t key_len = msg[0];
-        if (--key_len >= PROP_KEY_MAX)
+        if (--key_len >= PROP_NAME_MAX)
             continue;
 
         size_t val_len = msg[1];
-        if (--val_len >= PROP_VALUE_MAX)
+        if (--val_len >= PROP_NAME_MAX)
             continue;
 
         ret = recv(fd, msg + 2, msg[0] + msg[1], 0);
@@ -440,7 +440,7 @@ int property_set_bool(const char* key, int8_t value)
 
 int8_t property_get_bool(const char* key, int8_t default_value)
 {
-    char buf[PROP_VALUE_MAX];
+    char buf[PROP_NAME_MAX];
     int len = property_get(key, buf, NULL);
     if (len == 1) {
         char ch = buf[0];
@@ -502,7 +502,7 @@ int property_set_int32(const char* key, int32_t value)
 
 int32_t property_get_int32(const char* key, int32_t default_value)
 {
-    char value[PROP_VALUE_MAX];
+    char value[PROP_NAME_MAX];
     if (property_get(key, value, NULL) < 0)
         return default_value;
 
@@ -559,7 +559,7 @@ int property_set_int64(const char* key, int64_t value)
 
 int64_t property_get_int64(const char* key, int64_t default_value)
 {
-    char value[PROP_VALUE_MAX];
+    char value[PROP_NAME_MAX];
     if (property_get(key, value, NULL) < 0)
         return default_value;
 

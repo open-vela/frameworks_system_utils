@@ -78,13 +78,13 @@ static int kvdb_get_index(const char* key)
 static int kvdb_set(unqlite* db[], const char* key, size_t key_len,
                     const char* value, size_t val_len, bool force)
 {
-    if (--key_len >= PROP_KEY_MAX)
+    if (--key_len >= PROP_NAME_MAX)
         return -E2BIG;
 
     if (key[key_len])
         return -EINVAL;
 
-    if (--val_len >= PROP_VALUE_MAX)
+    if (--val_len >= PROP_NAME_MAX)
         return -E2BIG;
 
     if (value[val_len])
@@ -111,7 +111,7 @@ static int kvdb_set(unqlite* db[], const char* key, size_t key_len,
 
 static int kvdb_get(unqlite* db[], const char* key, size_t key_len, char* value)
 {
-    if (--key_len >= PROP_KEY_MAX)
+    if (--key_len >= PROP_NAME_MAX)
         return -E2BIG;
 
     if (key[key_len])
@@ -121,7 +121,7 @@ static int kvdb_get(unqlite* db[], const char* key, size_t key_len, char* value)
     const char* env = getenv(key);
     if (env) {
         size_t len = strlen(env) + 1;
-        if (len > PROP_VALUE_MAX)
+        if (len > PROP_NAME_MAX)
             return -E2BIG;
 
         memcpy(value, env, len);
@@ -133,7 +133,7 @@ static int kvdb_get(unqlite* db[], const char* key, size_t key_len, char* value)
     if (i < 0)
         return i;
 
-    unqlite_int64 val_len = value ? PROP_VALUE_MAX : 0;
+    unqlite_int64 val_len = value ? PROP_NAME_MAX : 0;
     int ret = unqlite_kv_fetch(db[i], key, ++key_len, value, &val_len);
     if (ret < 0)
         return ret;
@@ -146,7 +146,7 @@ static int kvdb_get(unqlite* db[], const char* key, size_t key_len, char* value)
 
 static int kvdb_delete(unqlite* db[], const char* key, size_t key_len)
 {
-    if (--key_len >= PROP_KEY_MAX)
+    if (--key_len >= PROP_NAME_MAX)
         return -E2BIG;
 
     if (key[key_len])
@@ -424,7 +424,7 @@ static bool kvdb_client(int fd, unqlite* db[])
         case 'G': {
             size_t key_len = msg[1];
             const char* key = msg + 2;
-            char value[PROP_VALUE_MAX];
+            char value[PROP_NAME_MAX];
             int len = kvdb_get(db, key, key_len, value);
             if (len > 0)
                 send(fd, value, len, 0);

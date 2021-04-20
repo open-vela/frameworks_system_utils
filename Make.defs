@@ -16,4 +16,6 @@
 
 ifneq ($(CONFIG_KVDB),)
 CONFIGURED_APPS += $(APPDIR)/frameworks/kvdb
+CFLAGS   += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/frameworks/kvdb/include}
+CXXFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/frameworks/kvdb/include}
 endif
