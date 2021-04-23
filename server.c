@@ -138,7 +138,7 @@ static int kvdb_get(unqlite* db[], const char* key, size_t key_len, char* value)
     if (ret < 0)
         return ret;
 
-    if (val_len <= 0 || value && value[val_len - 1])
+    if ((val_len <= 0) || (value && value[val_len - 1]))
         return -EINVAL;
 
     return val_len;
