@@ -19,8 +19,8 @@
 
 #include <stdint.h>
 
-#define PROP_NAME_MAX      100
-#define PROP_VALUE_MAX     100
+#define PROP_NAME_MAX      127
+#define PROP_VALUE_MAX     255
 
 #define PROPERTY_KEY_MAX   PROP_NAME_MAX
 #define PROPERTY_VALUE_MAX PROP_VALUE_MAX
