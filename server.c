@@ -413,7 +413,7 @@ static bool kvdb_client(int fd, unqlite* db[])
 
     switch (msg[0]) {
         case 'D': {
-            size_t key_len = msg[1];
+            size_t key_len = (unsigned char)msg[1];
             const char* key = msg + 2;
             int32_t err = kvdb_delete(db, key, key_len);
             if (err >= 0)
@@ -422,7 +422,7 @@ static bool kvdb_client(int fd, unqlite* db[])
             break;
         }
         case 'G': {
-            size_t key_len = msg[1];
+            size_t key_len = (unsigned char)msg[1];
             const char* key = msg + 2;
             char value[PROP_NAME_MAX];
             int len = kvdb_get(db, key, key_len, value);
@@ -431,8 +431,8 @@ static bool kvdb_client(int fd, unqlite* db[])
             break;
         }
         case 'S': {
-            size_t key_len = msg[1];
-            size_t val_len = msg[2];
+            size_t key_len = (unsigned char)msg[1];
+            size_t val_len = (unsigned char)msg[2];
             const char* key = msg + 3;
             const char* value = key + key_len;
             int32_t err = kvdb_set(db, key, key_len, value, val_len, false);

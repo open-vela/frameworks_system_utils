@@ -373,11 +373,11 @@ int property_list(property_callback propfn, void* cookie)
             goto out;
         }
 
-        size_t key_len = msg[0];
+        size_t key_len = (unsigned char)msg[0];
         if (--key_len >= PROP_NAME_MAX)
             continue;
 
-        size_t val_len = msg[1];
+        size_t val_len = (unsigned char)msg[1];
         if (--val_len >= PROP_NAME_MAX)
             continue;
 
