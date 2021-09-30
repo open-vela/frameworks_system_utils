@@ -20,7 +20,7 @@ CSRCS     = client.c
 MAINSRC   = setprop.c getprop.c
 PROGNAME  = setprop getprop
 
-ifeq ($(CONFIG_KVDB_REMOTE_SERVER),)
+ifeq ($(CONFIG_KVDB_SERVER),y)
 MAINSRC   += server.c
 PROGNAME  += kvdbd
 endif

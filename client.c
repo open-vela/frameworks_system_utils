@@ -50,10 +50,10 @@
 
 static int property_connect(void)
 {
-#ifdef CONFIG_KVDB_REMOTE_SERVER
-    int fd = socket(AF_RPMSG, SOCK_STREAM, 0);
-#else
+#ifdef CONFIG_KVDB_SERVER
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+#else
+    int fd = socket(AF_RPMSG, SOCK_STREAM, 0);
 #endif
     if (fd < 0)
         return -errno;
@@ -67,16 +67,16 @@ static int property_connect(void)
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 #endif
 
-#ifdef CONFIG_KVDB_REMOTE_SERVER
-    struct sockaddr_rpmsg addr = {
-        .rp_family = AF_RPMSG,
-        .rp_name = PROP_SERVER_PATH,
-        .rp_cpu = CONFIG_KVDB_RPMSG_SERVER_NAME,
-    };
-#else
+#ifdef CONFIG_KVDB_SERVER
     struct sockaddr_un addr = {
         .sun_family = AF_UNIX,
         .sun_path = PROP_SERVER_PATH,
+    };
+#else
+    struct sockaddr_rpmsg addr = {
+        .rp_family = AF_RPMSG,
+        .rp_name = PROP_SERVER_PATH,
+        .rp_cpu = CONFIG_KVDB_SERVER_CPUNAME,
     };
 #endif
 
