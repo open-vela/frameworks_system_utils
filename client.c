@@ -385,7 +385,7 @@ int property_list(property_callback propfn, void* cookie)
         char* pos = msg + 2;
         while (remaining > 0) {
             ret = recv(fd, pos, remaining, 0);
-            if (ret < 0)
+            if (ret <= 0)
                 break;
             pos += ret;
             remaining -= ret;
