@@ -27,7 +27,7 @@ config KVDB_PRIORITY
 
 config KVDB_STACKSIZE
 	int "stack size"
-	default DEFAULT_TASK_STACKSIZE
+	default 4096
 
 config KVDB_SERVER
 	bool "KVDB server"
