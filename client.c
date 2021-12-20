@@ -603,3 +603,27 @@ int property_commit(void)
 
     return send(fd, "C", 1, 0) > 0 ? 0 : -errno;
 }
+
+/****************************************************************************
+ * Name: property_reload
+ *
+ * Description:
+ *   reload default property value
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   On success returns 0.
+ *   On failure returns -errno.
+ *
+ ****************************************************************************/
+
+int property_reload(void)
+{
+    int fd = property_connect();
+    if (fd < 0)
+        return fd;
+
+    return send(fd, "R", 1, 0) > 0 ? 0 : -errno;
+}

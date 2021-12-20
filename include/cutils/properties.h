@@ -37,6 +37,7 @@ int property_set(const char* key, const char* value);
 int property_get(const char* key, char* value, const char* default_value);
 int property_delete(const char* key);
 int property_commit(void);
+int property_reload(void);
 
 typedef void (*property_callback)(const char* key, const char* value, void* cookie);
 int property_list(property_callback propfn, void* cookie);

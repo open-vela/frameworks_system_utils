@@ -235,28 +235,8 @@ static void kvdb_uninit(unqlite* db[])
     }
 }
 
-static int kvdb_init(unqlite* db[])
+static int kvdb_load(unqlite* db[])
 {
-    static const char* path[KVDB_COUNT] = {
-        [KVDB_MEM]     = "",
-        [KVDB_PERSIST] = CONFIG_KVDB_PERSIST_PATH,
-    };
-
-    int ret = 0;
-
-    /* open database */
-    memset(db, 0, sizeof(db[0]) * KVDB_COUNT);
-    for (int i = 0; i < KVDB_COUNT; i++) {
-        if (path[i][0])
-            ret = unqlite_open(&db[i], path[i], UNQLITE_OPEN_CREATE | UNQLITE_OPEN_OMIT_JOURNALING);
-        else
-            ret = unqlite_open(&db[i], NULL, UNQLITE_OPEN_IN_MEMORY);
-
-        if (ret < 0)
-            goto out;
-    }
-
-    /* load initial value from text file */
     FILE* f = fopen(CONFIG_KVDB_SOURCE_PATH, "r");
     if (!f)
         return 0; /* optional */
@@ -284,8 +264,33 @@ static int kvdb_init(unqlite* db[])
     }
 
     fclose(f);
-    kvdb_commit(db);
+    return 0;
+}
 
+static int kvdb_init(unqlite* db[])
+{
+    static const char* path[KVDB_COUNT] = {
+        [KVDB_MEM]     = "",
+        [KVDB_PERSIST] = CONFIG_KVDB_PERSIST_PATH,
+    };
+
+    int ret = 0;
+
+    /* open database */
+    memset(db, 0, sizeof(db[0]) * KVDB_COUNT);
+    for (int i = 0; i < KVDB_COUNT; i++) {
+        if (path[i][0])
+            ret = unqlite_open(&db[i], path[i], UNQLITE_OPEN_CREATE | UNQLITE_OPEN_OMIT_JOURNALING);
+        else
+            ret = unqlite_open(&db[i], NULL, UNQLITE_OPEN_IN_MEMORY);
+
+        if (ret < 0)
+            goto out;
+    }
+
+    /* load initial value from text file */
+    kvdb_load(db);
+    kvdb_commit(db);
     return 0;
 
 out:
@@ -461,6 +466,10 @@ static bool kvdb_client(int fd, unqlite* db[])
         }
         case 'C': {
             kvdb_commit(db);
+            break;
+        }
+        case 'R': {
+            kvdb_load(db);
             break;
         }
     }
