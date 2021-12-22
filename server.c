@@ -235,7 +235,7 @@ static void kvdb_uninit(unqlite* db[])
     }
 }
 
-static int kvdb_load(unqlite* db[])
+static int kvdb_load(unqlite* db[], bool force)
 {
     FILE* f = fopen(CONFIG_KVDB_SOURCE_PATH, "r");
     if (!f)
@@ -257,7 +257,7 @@ static int kvdb_load(unqlite* db[])
             continue;
 
         size_t key_len = strlen(key) + 1;
-        if (kvdb_get(db, key, key_len, NULL) >= 0)
+        if(!force && kvdb_get(db, key, key_len, NULL) >= 0)
             continue;
 
         kvdb_set(db, key, key_len, value, strlen(value) + 1, true);
@@ -289,7 +289,7 @@ static int kvdb_init(unqlite* db[])
     }
 
     /* load initial value from text file */
-    kvdb_load(db);
+    kvdb_load(db, false);
     kvdb_commit(db);
     return 0;
 
@@ -469,7 +469,7 @@ static bool kvdb_client(int fd, unqlite* db[])
             break;
         }
         case 'R': {
-            kvdb_load(db);
+            kvdb_load(db, true);
             break;
         }
     }
