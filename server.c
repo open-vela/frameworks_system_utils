@@ -237,33 +237,41 @@ static void kvdb_uninit(unqlite* db[])
 
 static int kvdb_load(unqlite* db[], bool force)
 {
-    FILE* f = fopen(CONFIG_KVDB_SOURCE_PATH, "r");
-    if (!f)
-        return 0; /* optional */
+    char *source_path, *token_path, *saveptr;
 
-    char buf[PROP_MSG_MAX];
-    while (fgets(buf, PROP_MSG_MAX, f)) {
-        if (kvdb_is_comment(buf))
-            continue;
+    for (source_path = CONFIG_KVDB_SOURCE_PATH; ; source_path = NULL) {
+        token_path = strtok_r(source_path, ";", &saveptr);
+        if (token_path == NULL)
+            break;
 
-        char* tmp;
-        char* key = strtok_r(buf, "=", &tmp);
-        char* value = strtok_r(NULL, "\n", &tmp);
-        if (!value)
-            continue;
+        FILE* f = fopen(token_path, "r");
+        if (!f)
+            return 0; /* optional */
 
-        int i = kvdb_get_index(key);
-        if (i < 0)
-            continue;
+        char buf[PROP_MSG_MAX];
+        while (fgets(buf, PROP_MSG_MAX, f)) {
+            if (kvdb_is_comment(buf))
+                continue;
 
-        size_t key_len = strlen(key) + 1;
-        if(!force && kvdb_get(db, key, key_len, NULL) >= 0)
-            continue;
+            char* tmp;
+            char* key = strtok_r(buf, "=", &tmp);
+            char* value = strtok_r(NULL, "\n", &tmp);
+            if (!value)
+                continue;
 
-        kvdb_set(db, key, key_len, value, strlen(value) + 1, true);
+            int i = kvdb_get_index(key);
+            if (i < 0)
+                continue;
+
+            size_t key_len = strlen(key) + 1;
+            if(!force && kvdb_get(db, key, key_len, NULL) >= 0)
+                continue;
+
+            kvdb_set(db, key, key_len, value, strlen(value) + 1, true);
+        }
+
+        fclose(f);
     }
-
-    fclose(f);
     return 0;
 }
 
