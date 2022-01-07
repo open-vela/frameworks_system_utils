@@ -1,5 +1,0 @@
-ifneq ($(CONFIG_APP_FOCUS),)
-
-CONFIGURED_APPS += $(APPDIR)/frameworks/utils
-
-endif
