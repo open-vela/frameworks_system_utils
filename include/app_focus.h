@@ -31,7 +31,7 @@
  * Public Types
  ****************************************************************************/
 
-typedef void (*app_focus_callback)(int focus_return_type);
+typedef void (*app_focus_callback)(int focus_return_type, void* callback_argv);
 
 // struct for single focus id
 typedef struct app_focus_id {
@@ -40,6 +40,7 @@ typedef struct app_focus_id {
     unsigned int thread_id; // int extendable for different platform
     int focus_state;
     app_focus_callback focus_callback;
+    void* callback_argv;
 } app_focus_id;
 
 typedef void (*app_focus_change_callback)(
