@@ -90,6 +90,7 @@ static int app_focus_node_list_remove(app_focus_stack* s,
         (s->node_list + input_client_id)->focus_id.thread_id = 0;
         (s->node_list + input_client_id)->focus_id.focus_state = APP_FOCUS_STATE_STACK_QUIT;
         (s->node_list + input_client_id)->focus_id.focus_callback = NULL;
+        (s->node_list + input_client_id)->focus_id.callback_argv = NULL;
         return 0;
     }
     return -ENOENT;
@@ -451,12 +452,16 @@ void app_focus_stack_display(void* x)
     {
         syslog(LOG_INFO, "Request client id: %d, "
                          "focus level: %d, "
+                         "thread id: %d, "
                          "focus state: %d, "
-                         "thread id: %d\n",
+                         "focus callback: %p, "
+                         "callback arg: %p\n",
             p_tmp_node->focus_id.client_id,
             p_tmp_node->focus_id.focus_level,
+            p_tmp_node->focus_id.thread_id,
             p_tmp_node->focus_id.focus_state,
-            p_tmp_node->focus_id.thread_id);
+            p_tmp_node->focus_id.focus_callback,
+            p_tmp_node->focus_id.callback_argv);
     }
 }
 
@@ -486,6 +491,7 @@ void* app_focus_stack_init(size_t focus_stack_size,
                 .thread_id = 0,
                 .focus_state = APP_FOCUS_STATE_STACK_QUIT,
                 .focus_callback = NULL,
+                .callback_argv = NULL,
             }
         };
         *(s->node_list + i) = tmp_node;
