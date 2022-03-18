@@ -407,9 +407,22 @@ static void* kvdb_list_thread(void* arg)
     return NULL;
 }
 
+ssize_t kvdb_recv(int sockfd, char *buf, size_t offset, size_t len)
+{
+    while (offset != len) {
+        ssize_t ret = recv(sockfd, buf + offset, len - offset, 0);
+        if (ret <= 0)
+            return ret;
+        offset += ret;
+    }
+
+    return len;
+}
+
 static bool kvdb_client(int fd, unqlite* db[])
 {
     bool dirty = false;
+    ssize_t len;
 
 #if CONFIG_KVDB_TIMEOUT_INTERVAL
     struct timeval timeout = {
@@ -422,25 +435,31 @@ static bool kvdb_client(int fd, unqlite* db[])
 
     char msg[PROP_MSG_MAX];
     msg[0] = msg[1] = msg[2] = 0; /* zero the first key bytes */
-    recv(fd, msg, PROP_MSG_MAX, 0);
+    len = recv(fd, msg, PROP_MSG_MAX, 0);
 
     switch (msg[0]) {
         case 'D': {
             size_t key_len = (unsigned char)msg[1];
             const char* key = msg + 2;
-            int32_t err = kvdb_delete(db, key, key_len);
-            if (err >= 0)
-                dirty = true;
-            send(fd, &err, 4, 0);
+            len = kvdb_recv(fd, msg, len, key_len + 2);
+            if (len > 0) {
+                int32_t err = kvdb_delete(db, key, key_len);
+                if (err >= 0)
+                    dirty = true;
+                send(fd, &err, 4, 0);
+            }
             break;
         }
         case 'G': {
             size_t key_len = (unsigned char)msg[1];
             const char* key = msg + 2;
             char value[PROP_VALUE_MAX];
-            int len = kvdb_get(db, key, key_len, value);
-            if (len > 0)
-                send(fd, value, len, 0);
+            len = kvdb_recv(fd, msg, len, key_len + 2);
+            if (len > 0) {
+                len = kvdb_get(db, key, key_len, value);
+                if (len > 0)
+                    send(fd, value, len, 0);
+            }
             break;
         }
         case 'S': {
@@ -448,10 +467,13 @@ static bool kvdb_client(int fd, unqlite* db[])
             size_t val_len = (unsigned char)msg[2];
             const char* key = msg + 3;
             const char* value = key + key_len;
-            int32_t err = kvdb_set(db, key, key_len, value, val_len, false);
-            if (err >= 0)
-                dirty = true;
-            send(fd, &err, 4, 0);
+            len = kvdb_recv(fd, msg, len, key_len + val_len + 3);
+            if (len > 0) {
+                int32_t err = kvdb_set(db, key, key_len, value, val_len, false);
+                if (err >= 0)
+                    dirty = true;
+                send(fd, &err, 4, 0);
+            }
             break;
         }
         case 'L': {
