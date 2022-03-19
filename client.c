@@ -598,10 +598,14 @@ int64_t property_get_int64(const char* key, int64_t default_value)
 int property_commit(void)
 {
     int fd = property_connect();
+    int ret;
     if (fd < 0)
         return fd;
 
-    return send(fd, "C", 1, 0) > 0 ? 0 : -errno;
+    ret = send(fd, "C", 1, 0) > 0 ? 0 : -errno;
+
+    close(fd);
+    return ret;
 }
 
 /****************************************************************************
@@ -622,8 +626,12 @@ int property_commit(void)
 int property_reload(void)
 {
     int fd = property_connect();
+    int ret;
     if (fd < 0)
         return fd;
 
-    return send(fd, "R", 1, 0) > 0 ? 0 : -errno;
+    ret = send(fd, "R", 1, 0) > 0 ? 0 : -errno;
+
+    close(fd);
+    return ret;
 }
