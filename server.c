@@ -124,7 +124,9 @@ static int kvdb_get(unqlite* db[], const char* key, size_t key_len, char* value)
         if (len > PROP_VALUE_MAX)
             return -E2BIG;
 
-        memcpy(value, env, len);
+        if (value)
+            memcpy(value, env, len);
+
         return len;
     }
 
