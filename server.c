@@ -15,7 +15,6 @@
  */
 
 #include <errno.h>
-#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -309,15 +308,6 @@ out:
 }
 
 /****************************************************************************
- * Network Types
- ****************************************************************************/
-
-typedef struct kvdb_list_data {
-    int fd;
-    unqlite** db;
-} kvdb_list_data;
-
-/****************************************************************************
  * Network Functions
  ****************************************************************************/
 
@@ -398,17 +388,6 @@ static int kvdb_list_consume(const char* key, size_t key_len,
     return ret > 0 ? 0 : ret;
 }
 
-static void* kvdb_list_thread(void* arg)
-{
-    kvdb_list_data* data = arg;
-    void* cookie = (void*)data->fd;
-    kvdb_list(data->db, kvdb_list_consume, cookie);
-    send(data->fd, "", 1, 0); /* terminator */
-    close(data->fd);
-    free(data);
-    return NULL;
-}
-
 ssize_t kvdb_recv(int sockfd, char *buf, size_t offset, size_t len)
 {
     while (offset != len) {
@@ -479,22 +458,9 @@ static bool kvdb_client(int fd, unqlite* db[])
             break;
         }
         case 'L': {
-            kvdb_list_data* data = malloc(sizeof(*data));
-            if (!data)
-                break;
-
-            data->fd = fd;
-            data->db = db;
-
-            /* dispatch to new thread to allow the recursion */
-            pthread_t t;
-            if (pthread_create(&t, NULL, kvdb_list_thread, data) > 0) {
-                free(data);
-                break;
-            }
-
-            pthread_detach(t);
-            goto out; /* skip close fd, done in the thread */
+            kvdb_list(db, kvdb_list_consume, (void *)(uintptr_t)fd);
+            send(fd, "", 1, 0); /* terminator */
+            break;
         }
         case 'C': {
             kvdb_commit(db);
@@ -507,8 +473,6 @@ static bool kvdb_client(int fd, unqlite* db[])
     }
 
     close(fd); /* done, close client socket */
-
-out:
     return dirty;
 }
 
