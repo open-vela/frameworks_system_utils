@@ -197,7 +197,7 @@ out:
 int property_get(const char* key, char* value, const char* default_value)
 {
     if (!key)
-        return -EINVAL;
+        goto out;
 
     size_t key_len = strlen(key) + 1;
     if (key_len > PROP_NAME_MAX)

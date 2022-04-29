@@ -80,7 +80,7 @@ static int kvdb_set(unqlite* db[], const char* key, size_t key_len,
     if (--key_len >= PROP_NAME_MAX)
         return -E2BIG;
 
-    if (key[key_len])
+    if (!key || key[key_len])
         return -EINVAL;
 
     if (--val_len >= PROP_VALUE_MAX)
@@ -257,7 +257,7 @@ static int kvdb_load(unqlite* db[], bool force)
             char* tmp;
             char* key = strtok_r(buf, "=", &tmp);
             char* value = strtok_r(NULL, "\n", &tmp);
-            if (!value)
+            if (!key || !value)
                 continue;
 
             int i = kvdb_get_index(key);
@@ -388,12 +388,14 @@ static int kvdb_list_consume(const char* key, size_t key_len,
     return ret > 0 ? 0 : ret;
 }
 
-ssize_t kvdb_recv(int sockfd, char *buf, size_t offset, size_t len)
+static ssize_t kvdb_recv(int sockfd, char *buf, size_t offset, size_t len)
 {
-    while (offset != len) {
+    while (offset < len) {
         ssize_t ret = recv(sockfd, buf + offset, len - offset, 0);
-        if (ret <= 0)
+        if (ret < 0)
             return ret;
+        if (ret == 0)
+            return -ENODATA;
         offset += ret;
     }
 
@@ -416,13 +418,20 @@ static bool kvdb_client(int fd, unqlite* db[])
 
     char msg[PROP_MSG_MAX];
     msg[0] = msg[1] = msg[2] = 0; /* zero the first key bytes */
+
     len = recv(fd, msg, PROP_MSG_MAX, 0);
+    if (len <= 0)
+        goto out;
 
     switch (msg[0]) {
         case 'D': {
             size_t key_len = (unsigned char)msg[1];
+            size_t end_pos = key_len + 2;
+            if (end_pos >= PROP_MSG_MAX)
+                break;
+
             const char* key = msg + 2;
-            len = kvdb_recv(fd, msg, len, key_len + 2);
+            len = kvdb_recv(fd, msg, len, end_pos);
             if (len > 0) {
                 int32_t err = kvdb_delete(db, key, key_len);
                 if (err >= 0)
@@ -433,9 +442,13 @@ static bool kvdb_client(int fd, unqlite* db[])
         }
         case 'G': {
             size_t key_len = (unsigned char)msg[1];
+            size_t end_pos = key_len + 2;
+            if (end_pos >= PROP_MSG_MAX)
+                break;
+
             const char* key = msg + 2;
             char value[PROP_VALUE_MAX];
-            len = kvdb_recv(fd, msg, len, key_len + 2);
+            len = kvdb_recv(fd, msg, len, end_pos);
             if (len > 0) {
                 len = kvdb_get(db, key, key_len, value);
                 if (len > 0)
@@ -446,9 +459,13 @@ static bool kvdb_client(int fd, unqlite* db[])
         case 'S': {
             size_t key_len = (unsigned char)msg[1];
             size_t val_len = (unsigned char)msg[2];
+            size_t end_pos = key_len + val_len + 3;
+            if (end_pos >= PROP_MSG_MAX)
+                break;
+
             const char* key = msg + 3;
             const char* value = key + key_len;
-            len = kvdb_recv(fd, msg, len, key_len + val_len + 3);
+            len = kvdb_recv(fd, msg, len, end_pos);
             if (len > 0) {
                 int32_t err = kvdb_set(db, key, key_len, value, val_len, false);
                 if (err >= 0)
@@ -472,6 +489,7 @@ static bool kvdb_client(int fd, unqlite* db[])
         }
     }
 
+out:
     close(fd); /* done, close client socket */
     return dirty;
 }
