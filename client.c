@@ -503,7 +503,7 @@ int property_set_int32(const char* key, int32_t value)
  *   int32_t default_value: the value to return on failure
  *
  * Returned Value:
- *   On success returns a boolean.
+ *   On success returns a int32_t.
  *   On failure returns default_value.
  *
  ****************************************************************************/
@@ -560,7 +560,7 @@ int property_set_int64(const char* key, int64_t value)
  *   int64_t default_value: the value to return on failure
  *
  * Returned Value:
- *   On success returns a boolean.
+ *   On success returns a int64_t.
  *   On failure returns default_value.
  *
  ****************************************************************************/
@@ -612,7 +612,7 @@ int property_commit(void)
  * Name: property_reload
  *
  * Description:
- *   reload default property value
+ *   Reload default property value
  *
  * Input Parameters:
  *   None
