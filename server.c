@@ -238,14 +238,10 @@ static void kvdb_uninit(unqlite* db[])
 
 static int kvdb_load(unqlite* db[], bool force)
 {
-    char *source_path, *token_path, *saveptr;
+    const char *path = CONFIG_KVDB_SOURCE_PATH;
 
-    for (source_path = CONFIG_KVDB_SOURCE_PATH; ; source_path = NULL) {
-        token_path = strtok_r(source_path, ";", &saveptr);
-        if (token_path == NULL)
-            break;
-
-        FILE* f = fopen(token_path, "r");
+    for (; *path; path += strlen(path) + 1) {
+        FILE* f = fopen(path, "r");
         if (!f)
             continue;
 
