@@ -250,7 +250,7 @@ static int kvdb_load(unqlite* db[], bool force)
     while (*src) {
         sep = strchr(src, ';');
         if (sep) {
-            strlcpy(tmpb, src, MIN(PATH_MAX, sep - src));
+            strlcpy(tmpb, src, MIN(PATH_MAX, sep - src + 1));
             src = sep + 1;
         } else {
             path = src;
