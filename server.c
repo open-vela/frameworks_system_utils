@@ -35,6 +35,10 @@
 #define KVFD_REMOTE             1
 #define KVFD_COUNT              2
 
+#ifndef MIN
+    #define MIN(n,m)   (((n) < (m)) ? (n) : (m))
+#endif
+
 /****************************************************************************
  * Database Types
  ****************************************************************************/
@@ -238,9 +242,21 @@ static void kvdb_uninit(unqlite* db[])
 
 static int kvdb_load(unqlite* db[], bool force)
 {
-    const char *path = CONFIG_KVDB_SOURCE_PATH;
+    const char *src = CONFIG_KVDB_SOURCE_PATH;
+    char tmpb[PATH_MAX];
+    const char *path = tmpb;
+    const char *sep;
 
-    for (; *path; path += strlen(path) + 1) {
+    while (*src) {
+        sep = strchr(src, ';');
+        if (sep) {
+            strlcpy(tmpb, src, MIN(PATH_MAX, sep - src));
+            src = sep + 1;
+        } else {
+            path = src;
+            src += strlen(src);
+        }
+
         FILE* f = fopen(path, "r");
         if (!f)
             continue;
