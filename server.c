@@ -510,6 +510,7 @@ static void kvdb_server(int fd[], unqlite* db[])
 {
     struct pollfd pfd[KVFD_COUNT];
     int pfd_count = 0;
+    struct timespec ts;
     for (int i = 0; i < KVFD_COUNT; i++) {
         if (fd[i] > 0) {
             pfd[pfd_count].fd = fd[i];
@@ -525,7 +526,8 @@ static void kvdb_server(int fd[], unqlite* db[])
 
         /* commit the change after timeout */
         if (next) {
-            timeout = next - time(NULL);
+            clock_gettime(CLOCK_MONOTONIC, &ts);
+            timeout = next - ts.tv_sec;
             if (timeout <= 0) {
                 kvdb_commit(db);
                 timeout = -1;
@@ -547,7 +549,8 @@ static void kvdb_server(int fd[], unqlite* db[])
 
             /* is database changed? */
             if (kvdb_client(newfd, db) && next == 0) {
-                next = time(NULL) + CONFIG_KVDB_COMMIT_INTERVAL;
+                clock_gettime(CLOCK_MONOTONIC, &ts);
+                next = ts.tv_sec + CONFIG_KVDB_COMMIT_INTERVAL;
                 if (next == 0)
                     next++; /* ensure no zero */
             }
