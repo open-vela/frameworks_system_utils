@@ -18,6 +18,7 @@
  * Included Files
  ****************************************************************************/
 
+#include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,6 +33,24 @@
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
+
+static inline char nibble2ascii(unsigned char nibble)
+{
+    if (nibble < 10)
+        return '0' + nibble;
+    else
+        return 'a' + nibble - 10;
+}
+
+static inline int ascii2nibble(char ascii)
+{
+    if (isdigit(ascii))
+        return ascii - '0';
+    else if (isxdigit(ascii))
+        return tolower(ascii) - 'a' + 10;
+    else
+        return -ERANGE;
+}
 
 /****************************************************************************
  * Name: property_connect
@@ -578,6 +597,88 @@ int64_t property_get_int64(const char* key, int64_t default_value)
         return default_value;
 
     return ret;
+}
+
+/****************************************************************************
+ * Name: property_set_buffer
+ *
+ * Description:
+ *   Saves a binary buffer to database.
+ *
+ * Input Parameters:
+ *   const char* key: entry key string
+ *   const void* value: buffer value
+ *   size_t size: buffer size
+ *
+ * Returned Value:
+ *         0: success
+ *        <0: failure during execution
+ *
+ ****************************************************************************/
+
+int property_set_buffer(const char* key, const void* value, size_t size)
+{
+    if (2 * size >= PROP_VALUE_MAX)
+        return -E2BIG;
+
+    const unsigned char* tmp = value;
+    char buf[PROP_VALUE_MAX];
+    size_t i = 0;
+
+    while (i < size) {
+        buf[i++] = nibble2ascii(*tmp >> 4);
+        buf[i++] = nibble2ascii(*tmp++ & 0x0f);
+    }
+
+    buf[i] = '\0';
+    return property_set(key, buf);
+}
+
+/****************************************************************************
+ * Name: property_get_buffer
+ *
+ * Description:
+ *   Retrieve a Key-Value from database and interpret as binary buffer.
+ *
+ * Input Parameters:
+ *   const char* key: entry key string
+ *   void* value: buffer value
+ *   size_t size: buffer size
+ *
+ * Returned Value:
+ *   On success returns buffer length.
+ *   On failure returns -errno.
+ *
+ ****************************************************************************/\
+
+ssize_t property_get_buffer(const char* key, void* value, size_t size)
+{
+    char buf[PROP_VALUE_MAX];
+    int ret = property_get(key, buf, NULL);
+    if (ret < 0)
+        return ret;
+
+    char* tmp = value;
+    size_t i = 0;
+
+    while (buf[i]) {
+        if (2 * i >= size)
+            return -E2BIG;
+
+        ret = ascii2nibble(buf[i++]);
+        if (ret < 0)
+            return ret;
+
+        *tmp = ret << 4;
+
+        ret = ascii2nibble(buf[i++]);
+        if (ret < 0)
+            return ret;
+
+        *tmp++ |= ret;
+    }
+
+    return i / 2;
 }
 
 /****************************************************************************

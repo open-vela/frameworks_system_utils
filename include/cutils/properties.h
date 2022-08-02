@@ -18,6 +18,7 @@
 #define __CUTILS_PROPERTIES_H
 
 #include <stdint.h>
+#include <sys/types.h>
 
 /**
  * @brief Maximum property key string length = 127
@@ -147,6 +148,24 @@ int property_set_int64(const char* key, int64_t value);
  * @return On success returns a int64_t, otherwise returns default_value.
  */
 int64_t property_get_int64(const char* key, int64_t default_value);
+
+/**
+ * @brief Saves a binary buffer to database.
+ * @param[in] key entry key string
+ * @param[in] value buffer value
+ * @param[in] size entry size
+ * @return On success returns 0, -errno otherwise.
+ */
+int property_set_buffer(const char* key, const void* value, size_t size);
+
+/**
+ * @brief Retrieve a Key-Value from database and interpret as binary buffer.
+ * @param[in] key entry key string
+ * @param[in] value buffer value
+ * @param[in] size buffer size
+ * @return On success returns the array length, -errno otherwise.
+ */
+ssize_t property_get_buffer(const char* key, void* value, size_t size);
 
 #if defined(__cplusplus)
 }
