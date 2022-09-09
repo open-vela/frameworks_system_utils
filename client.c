@@ -400,7 +400,7 @@ int property_list(property_callback propfn, void* cookie)
         if (--val_len >= PROP_VALUE_MAX)
             continue;
 
-        int remaining = msg[0] + msg[1];
+        int remaining = (unsigned char)msg[0] + (unsigned char)msg[1];
         char* pos = msg + 2;
         while (remaining > 0) {
             ret = recv(fd, pos, remaining, 0);
