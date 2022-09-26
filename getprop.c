@@ -18,7 +18,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "kvdb.h"
+#include <kvdb.h>
 
 static void callback(const char* name, const char* value, void* cookie)
 {

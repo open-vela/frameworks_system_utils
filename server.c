@@ -24,8 +24,8 @@
 #include <sys/time.h>
 #include <netpacket/rpmsg.h>
 
-#include "kvdb.h"
-#include "unqlite.h"
+#include <kvdb.h>
+#include <unqlite.h>
 
 #define KVDB_MEM                0
 #define KVDB_PERSIST            1

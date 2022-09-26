@@ -28,7 +28,7 @@
 #include <sys/time.h>
 #include <netpacket/rpmsg.h>
 
-#include "kvdb.h"
+#include <kvdb.h>
 
 /****************************************************************************
  * Private Functions
