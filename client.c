@@ -618,14 +618,15 @@ int64_t property_get_int64(const char* key, int64_t default_value)
 
 int property_set_buffer(const char* key, const void* value, size_t size)
 {
-    if (2 * size >= PROP_VALUE_MAX)
+    size_t buf_size = 2 * size;
+    if (buf_size >= PROP_VALUE_MAX)
         return -E2BIG;
 
     const unsigned char* tmp = value;
     char buf[PROP_VALUE_MAX];
     size_t i = 0;
 
-    while (i < size) {
+    while (i < buf_size) {
         buf[i++] = nibble2ascii(*tmp >> 4);
         buf[i++] = nibble2ascii(*tmp++ & 0x0f);
     }
@@ -654,6 +655,7 @@ int property_set_buffer(const char* key, const void* value, size_t size)
 ssize_t property_get_buffer(const char* key, void* value, size_t size)
 {
     char buf[PROP_VALUE_MAX];
+    size_t buf_size = 2 * size;
     int ret = property_get(key, buf, NULL);
     if (ret < 0)
         return ret;
@@ -662,7 +664,7 @@ ssize_t property_get_buffer(const char* key, void* value, size_t size)
     size_t i = 0;
 
     while (buf[i]) {
-        if (2 * i >= size)
+        if (i >= buf_size)
             return -E2BIG;
 
         ret = ascii2nibble(buf[i++]);
