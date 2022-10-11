@@ -298,7 +298,7 @@ static int kvdb_init(unqlite* db[])
     int ret = 0;
 
     /* open database */
-    memset(db, 0, sizeof(db[0]) * KVDB_COUNT);
+    memset(db, 0, sizeof(*db) * KVDB_COUNT);
     for (int i = 0; i < KVDB_COUNT; i++) {
         if (path[i][0])
             ret = unqlite_open(&db[i], path[i], UNQLITE_OPEN_CREATE | UNQLITE_OPEN_OMIT_JOURNALING);
@@ -351,7 +351,7 @@ static int kvdb_bind(int fd[])
         [KVFD_REMOTE] = sizeof(struct sockaddr_rpmsg),
     };
 
-    memset(fd, 0, sizeof(int) * KVFD_COUNT);
+    memset(fd, 0, sizeof(*fd) * KVFD_COUNT);
 
     for (int i = 0; i < KVFD_COUNT; i++) {
         fd[i] = socket(family[i], SOCK_STREAM, 0);
@@ -527,7 +527,7 @@ static void kvdb_server(int fd[], unqlite* db[])
         /* commit the change after timeout */
         if (next) {
             clock_gettime(CLOCK_MONOTONIC, &ts);
-            timeout = next - ts.tv_sec;
+            timeout = (int)(next - ts.tv_sec);
             if (timeout <= 0) {
                 kvdb_commit(db);
                 timeout = -1;
@@ -573,6 +573,8 @@ static void kvdb_server(int fd[], unqlite* db[])
 
 int main(int argc, char* argv[])
 {
+    UNUSED(argc);
+    UNUSED(argv);
     int fd[KVFD_COUNT];
     int ret = kvdb_bind(fd);
     if (ret < 0)
