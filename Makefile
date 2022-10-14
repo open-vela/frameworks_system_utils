@@ -16,6 +16,10 @@
 
 include $(APPDIR)/Make.defs
 
+ifneq ($(CONFIG_ARCH_BOARD_CUSTOM_NAME),)
+  BIN := $(TOPDIR)/$(CONFIG_ARCH_BOARD_CUSTOM_DIR)/libs/$(CONFIG_ARCH_BOARD_CUSTOM_NAME)/libframework.a
+endif
+
 CSRCS     = client.c
 MAINSRC   = setprop.c getprop.c
 PROGNAME  = setprop getprop
@@ -30,5 +34,11 @@ CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/unqlite/unql
 PRIORITY  = $(CONFIG_KVDB_PRIORITY)
 STACKSIZE = $(CONFIG_KVDB_STACKSIZE)
 MODULE    = $(CONFIG_KVDB)
+
+CSRCS := $(wildcard $(CSRCS))
+MAINSRC := $(wildcard $(MAINSRC))
+
+distclean::
+	rm -rf $(TOPDIR)/$(CONFIG_ARCH_BOARD_CUSTOM_DIR)/libs/$(CONFIG_ARCH_BOARD_CUSTOM_NAME)
 
 include $(APPDIR)/Application.mk
