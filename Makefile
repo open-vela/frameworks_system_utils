@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2021 Xiaomi Corporation
+# Copyright (C) 2020 Xiaomi Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,13 +16,24 @@
 
 include $(APPDIR)/Make.defs
 
-ifneq ($(CONFIG_APP_FOCUS),)
+BIN := $(APPDIR)/staging/libframework.a
 
-BIN := libframework.a
+CSRCS     = client.c
+MAINSRC   = setprop.c getprop.c
+PROGNAME  = setprop getprop
 
-CSRCS   += app_focus.c
-CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/frameworks/utils/include}
+ifeq ($(CONFIG_KVDB_SERVER),y)
+MAINSRC   += server.c
+PROGNAME  += kvdbd
+endif
 
-endif # CONFIG_APP_FOCUS
+CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/unqlite/unqlite}
+
+PRIORITY  = $(CONFIG_KVDB_PRIORITY)
+STACKSIZE = $(CONFIG_KVDB_STACKSIZE)
+MODULE    = $(CONFIG_KVDB)
+
+CSRCS := $(wildcard $(CSRCS))
+MAINSRC := $(wildcard $(MAINSRC))
 
 include $(APPDIR)/Application.mk
