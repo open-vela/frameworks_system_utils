@@ -93,6 +93,43 @@ typedef void (*property_callback)(const char* key, const char* value, void* cook
 int property_list(property_callback propfn, void* cookie);
 
 /**
+ * @brief Wait the monitored key until its value updated or key deleted
+ * @param[in] key the monitored key string, support fnmatch pattern
+ * @param[in] timeout the wait timeout time (in milliseconds)
+ * @param[out] newkey pointer to a string buffer to receive the key of
+ *                    the updated/deleted value
+ * @param[out] newvalue pointer to a string buffer to receive the updated
+ *                      value or deleted value ('\0')
+ * @return On success returns 0, -errno otherwise.
+ */
+int property_wait(const char* key, char* newkey, char* newvalue, int timeout);
+
+/**
+ * @brief Open a key monitor channel
+ * @param[in] key the monitored key string, support fnmatch pattern
+ * @return On success returns a file descriptor, -errno otherwise.
+ */
+int property_monitor_open(const char* key);
+
+/**
+ * @brief Read the monitored key and value
+ * @param[in] fd file descriptor returned by property_monitor_open()
+ * @param[out] newkey pointer to a string buffer to receive the key of
+ *                    the updated/deleted value
+ * @param[out] newvalue pointer to a string buffer to receive the updated
+ *                      value or deleted value ('\0')
+ * @return On success returns 0, -errno otherwise.
+ */
+int property_monitor_read(int fd, char* newkey, char* newvalue);
+
+/**
+ * @brief Close a key monitor channel
+ * @param[in] fd file descriptor returned by property_monitor_open()
+ * @return On success returns 0, -errno otherwise.
+ */
+int property_monitor_close(int fd);
+
+/**
  * @brief Saves a boolean to database.
  * @param[in] key entry key string
  * @param[in] value entry boolean value

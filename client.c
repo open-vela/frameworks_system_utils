@@ -23,6 +23,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <poll.h>
+
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/time.h>
@@ -58,9 +60,8 @@ static ssize_t recv_safe(int sockfd, char *buf, size_t offset, size_t len)
         ssize_t ret = recv(sockfd, buf + offset, len - offset, 0);
         if (ret < 0)
             return -errno;
-        if (ret == 0) {
+        if (ret == 0)
             return -ENODATA;
-        }
         offset += ret;
     }
 
@@ -434,6 +435,219 @@ int property_list(property_callback propfn, void* cookie)
 
 out:
     close(fd);
+    return ret;
+}
+
+/****************************************************************************
+ * Name: property_wait
+ *
+ * Description:
+ *   Wait the monitored key until its value updated or key deleted.
+ *
+ * Input Parameters:
+ *   const char* key     : the monitored key string, support fnmatch pattern
+ *   char*       newkey  : pointer to a string buffer to receive the key of
+ *                         the updated/deleted value
+ *   char*       newvalue: pointer to a string buffer to receive the updated
+ *                         value or deleted value ('\0')
+ *   int         timeout : the wait timeout time (in milliseconds)
+ *
+ * Returned Value:
+ *   On success returns 0, -errno otherwise.
+ *
+ ****************************************************************************/
+
+int property_wait(const char* key, char* newkey, char* newvalue, int timeout)
+{
+    if (key == NULL)
+        return -EINVAL;
+
+    int fd = property_monitor_open(key);
+    if (fd < 0)
+        return fd;
+
+    struct pollfd fds = {
+      .fd = fd,
+      .events = POLLIN
+    };
+
+    int ret = poll(&fds, 1, timeout);
+    if (ret < 0) {
+      ret = -errno;
+      goto out;
+    }
+    else if (ret == 0 || (fds.revents & POLLIN) == 0) {
+        ret = -ETIMEDOUT;
+        goto out;
+    }
+
+    ret = property_monitor_read(fd, newkey, newvalue);
+
+out:
+    property_monitor_close(fd);
+    return ret;
+}
+
+/****************************************************************************
+ * Name: property_monitor_open
+ *
+ * Description:
+ *   Open a key monitor channel
+ *
+ * Input Parameters:
+ *   const char* key : the monitored key string, support fnmatch pattern
+ *
+ * Returned Value:
+ *   On success returns a file descriptor, -errno otherwise.
+ *
+ ****************************************************************************/
+
+int property_monitor_open(const char* key)
+{
+    if (key == NULL)
+        return -EINVAL;
+
+    size_t key_len = strlen(key) + 1;
+    if (key_len > PROP_NAME_MAX)
+        return -E2BIG;
+
+    int fd = property_connect();
+    if (fd < 0)
+        return fd;
+
+    /*------------------------*
+    |   1   |   1   | key_len |
+    |-------|-----------------|
+    |  'M'  |key_len|[key'\0']|
+    *-------------------------*/
+
+    char cmd[2] = {'M', key_len};
+
+    struct iovec iov[2] = {
+        {.iov_base = cmd         , .iov_len = 2      },
+        {.iov_base = (char*)key  , .iov_len = key_len},
+    };
+
+    struct msghdr msg = {0};
+    msg.msg_iov    = iov;
+    msg.msg_iovlen = 2;
+
+    int ret = sendmsg(fd, &msg, 0);
+    if (ret < 0) {
+        ret = -errno;
+        goto out;
+    }
+
+    /*-----*
+     |  4  |
+     |-----|
+     |error|
+     *-----*/
+
+    int32_t err;
+    ret = recv(fd, &err, 4, 0);
+    if (ret < 4) {
+        ret = ret < 0 ? -errno : -EINVAL;
+        goto out;
+    }
+
+    if (err < 0) {
+        ret = err;
+        goto out;
+    }
+
+    ret = fd;
+
+out:
+    return ret;
+}
+
+/****************************************************************************
+ * Name: property_monitor_read
+ *
+ * Description:
+ *   Wait the monitored key until its value updated or key deleted.
+ *
+ * Input Parameters:
+ *   int   fd      : file descriptor returned by property_monitor_open()
+ *   char* newkey  : pointer to a strint buffer to receive the key of the
+ *                   updated/deleted value
+ *   char* newvalue: pointer to a string buffer to receive the updated
+ *                   value or deleted value ('\0')
+ *
+ * Returned Value:
+ *   On success returns 0, -errno otherwise.
+ *
+ ****************************************************************************/
+
+int property_monitor_read(int fd, char* newkey, char* newvalue)
+{
+    if (newvalue == NULL)
+        return -EINVAL;
+
+    char msg[PROP_MSG_MAX];
+    size_t ret = recv(fd, msg, 2, 0);
+    if (ret < 2)
+        return ret < 0 ? -errno : -ENODATA;
+
+    size_t key_len = (unsigned char)msg[0];
+    if (key_len > PROP_NAME_MAX)
+        return -E2BIG;
+
+    size_t val_len = (unsigned char)msg[1];
+    if (val_len > PROP_VALUE_MAX)
+        return -E2BIG;
+
+    size_t total = key_len + val_len + 2;
+    ret = recv_safe(fd, msg, ret, total);
+    if (ret < 0)
+        return ret;
+
+    const char* key = &msg[2];
+    if (newkey != NULL)
+        strlcpy(newkey, key, PROP_NAME_MAX);
+
+    if (val_len == 0) {
+        /*-------------------------*
+         |   1   |   1   | key_len |
+         |-------------------------|
+         |key_len|   0   |[key'\0']|
+         *-------------------------*/
+
+        newvalue = '\0';
+    } else {
+        /*-------------------------------------*
+         |   1   |   1   | key_len |  val_len  |
+         |-------------------------------------|
+         |key_len|val_len|[key'\0']|[value'\0']|
+         *-------------------------------------*/
+
+        const char* value = &msg[2 + key_len];
+        strlcpy(newvalue, value, PROP_VALUE_MAX);
+    }
+
+    return 0;
+}
+
+/****************************************************************************
+ * Name: property_monitor_close
+ *
+ * Description:
+ *   Close a key monitor channel
+ *
+ * Input Parameters:
+ *   int   fd      : file descriptor returned by property_monitor_open()
+ *
+ * Returned Value:
+ *   On success returns 0, -errno otherwise.
+ *
+ ****************************************************************************/
+
+int property_monitor_close(int fd)
+{
+    int ret = close(fd);
+    if (ret < 0)
+        ret = -errno;
     return ret;
 }
 
