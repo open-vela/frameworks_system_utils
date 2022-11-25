@@ -586,7 +586,7 @@ int property_monitor_read(int fd, char* newkey, char* newvalue)
         return -EINVAL;
 
     char msg[PROP_MSG_MAX];
-    size_t ret = recv(fd, msg, 2, 0);
+    ssize_t ret = recv(fd, msg, 2, 0);
     if (ret < 2)
         return ret < 0 ? -errno : -ENODATA;
 
