@@ -614,7 +614,7 @@ int property_monitor_read(int fd, char* newkey, char* newvalue)
          |key_len|   0   |[key'\0']|
          *-------------------------*/
 
-        newvalue = '\0';
+        newvalue[0] = '\0';
     } else {
         /*-------------------------------------*
          |   1   |   1   | key_len |  val_len  |
