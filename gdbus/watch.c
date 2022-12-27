@@ -40,7 +40,7 @@
 static DBusHandlerResult message_filter(DBusConnection *connection,
 					DBusMessage *message, void *user_data);
 
-static guint listener_id = 0;
+static unsigned int listener_id = 0;
 static GSList *listeners = NULL;
 
 struct service_data {
@@ -48,7 +48,7 @@ struct service_data {
 	DBusPendingCall *call;
 	char *name;
 	const char *owner;
-	guint id;
+	unsigned int id;
 	struct filter_callback *callback;
 };
 
@@ -59,7 +59,7 @@ struct filter_callback {
 	GDBusDestroyFunction destroy_func;
 	struct service_data *data;
 	void *user_data;
-	guint id;
+	unsigned int id;
 };
 
 struct filter_data {
@@ -73,9 +73,9 @@ struct filter_data {
 	char *argument;
 	GSList *callbacks;
 	GSList *processed;
-	guint name_watch;
-	gboolean lock;
-	gboolean registered;
+	unsigned int name_watch;
+	bool lock;
+	bool registered;
 };
 
 static struct filter_data *filter_data_find_match(DBusConnection *connection,
@@ -161,7 +161,7 @@ static void format_rule(struct filter_data *data, char *rule, size_t size)
 				",arg0='%s'", data->argument);
 }
 
-static gboolean add_match(struct filter_data *data,
+static bool add_match(struct filter_data *data,
 				DBusHandleMessageFunction filter)
 {
 	DBusError err;
@@ -184,7 +184,7 @@ static gboolean add_match(struct filter_data *data,
 	return TRUE;
 }
 
-static gboolean remove_match(struct filter_data *data)
+static bool remove_match(struct filter_data *data)
 {
 	DBusError err;
 	char rule[DBUS_MAXIMUM_MATCH_RULE_LENGTH];
@@ -259,7 +259,7 @@ proceed:
 
 static struct filter_callback *filter_data_find_callback(
 						struct filter_data *data,
-						guint id)
+						unsigned int id)
 {
 	GSList *l;
 
@@ -363,7 +363,7 @@ static void service_data_free(struct service_data *data)
 }
 
 /* Returns TRUE if data is freed */
-static gboolean filter_data_remove_callback(struct filter_data *data,
+static bool filter_data_remove_callback(struct filter_data *data,
 						struct filter_callback *cb)
 {
 	data->callbacks = g_slist_remove(data->callbacks, cb);
@@ -693,7 +693,7 @@ done:
 	dbus_message_unref(message);
 }
 
-guint dbus_add_service_watch(DBusConnection *connection, const char *name,
+unsigned int dbus_add_service_watch(DBusConnection *connection, const char *name,
 				GDBusWatchFunction connect,
 				GDBusWatchFunction disconnect,
 				void *user_data, GDBusDestroyFunction destroy)
@@ -722,7 +722,7 @@ guint dbus_add_service_watch(DBusConnection *connection, const char *name,
 	return cb->id;
 }
 
-guint dbus_add_disconnect_watch(DBusConnection *connection, const char *name,
+unsigned int dbus_add_disconnect_watch(DBusConnection *connection, const char *name,
 				GDBusWatchFunction func,
 				void *user_data, GDBusDestroyFunction destroy)
 {
@@ -730,7 +730,7 @@ guint dbus_add_disconnect_watch(DBusConnection *connection, const char *name,
 							user_data, destroy);
 }
 
-guint dbus_add_signal_watch(DBusConnection *connection,
+unsigned int dbus_add_signal_watch(DBusConnection *connection,
 				const char *sender, const char *path,
 				const char *interface, const char *member,
 				GDBusSignalFunction function, void *user_data,
@@ -757,7 +757,7 @@ guint dbus_add_signal_watch(DBusConnection *connection,
 	return cb->id;
 }
 
-guint dbus_add_properties_watch(DBusConnection *connection,
+unsigned int dbus_add_properties_watch(DBusConnection *connection,
 				const char *sender, const char *path,
 				const char *interface,
 				GDBusSignalFunction function, void *user_data,
@@ -785,7 +785,7 @@ guint dbus_add_properties_watch(DBusConnection *connection,
 	return cb->id;
 }
 
-gboolean dbus_remove_watch(DBusConnection *connection, guint id)
+bool dbus_remove_watch(DBusConnection *connection, unsigned int id)
 {
 	struct filter_data *data;
 	struct filter_callback *cb;

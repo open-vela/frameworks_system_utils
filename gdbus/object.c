@@ -55,8 +55,8 @@ struct generic_data {
 	GSList *objects;
 	GSList *added;
 	GSList *removed;
-	guint process_id;
-	gboolean pending_prop;
+	unsigned int process_id;
+	bool pending_prop;
 	char *introspect;
 	struct generic_data *parent;
 };
@@ -120,7 +120,7 @@ static void print_arguments(GString *gstr, const GDBusArgInfo *args,
 #define G_DBUS_ANNOTATE_NOREPLY \
 	G_DBUS_ANNOTATE("Method.NoReply", "true")
 
-static gboolean check_experimental(int flags, int flag)
+static bool check_experimental(int flags, int flag)
 {
 	if (!(flags & flag))
 		return FALSE;
@@ -341,7 +341,7 @@ void dbus_pending_error(DBusConnection *connection,
 }
 
 int polkit_check_authorization(DBusConnection *conn,
-				const char *action, gboolean interaction,
+				const char *action, bool interaction,
 				void (*function) (dbus_bool_t authorized,
 							void *user_data),
 						void *user_data, int timeout);
@@ -366,7 +366,7 @@ static void builtin_security_result(dbus_bool_t authorized, void *user_data)
 
 static void builtin_security_function(DBusConnection *conn,
 						const char *action,
-						gboolean interaction,
+						bool interaction,
 						GDBusPendingReply pending_reply)
 {
 	struct builtin_security_data *data;
@@ -380,7 +380,7 @@ static void builtin_security_function(DBusConnection *conn,
 		dbus_pending_error(conn, pending_reply, NULL, NULL);
 }
 
-static gboolean check_privilege(DBusConnection *conn, DBusMessage *msg,
+static bool check_privilege(DBusConnection *conn, DBusMessage *msg,
 			const GDBusMethodTable *method, void *iface_user_data)
 {
 	const GDBusSecurityTable *security;
@@ -388,7 +388,7 @@ static gboolean check_privilege(DBusConnection *conn, DBusMessage *msg,
 	for (security = security_table; security && security->privilege;
 								security++) {
 		struct security_data *secdata;
-		gboolean interaction;
+		bool interaction;
 
 		if (security->privilege != method->privilege)
 			continue;
@@ -611,7 +611,7 @@ static struct interface_data *find_interface(GSList *interfaces,
 	return NULL;
 }
 
-static gboolean dbus_args_have_signature(const GDBusArgInfo *args,
+static bool dbus_args_have_signature(const GDBusArgInfo *args,
 							DBusMessage *message)
 {
 	const char *sig = dbus_message_get_signature(message);
@@ -642,7 +642,7 @@ static void add_pending(struct generic_data *data)
 	pending = g_slist_append(pending, data);
 }
 
-static gboolean remove_interface(struct generic_data *data, const char *name)
+static bool remove_interface(struct generic_data *data, const char *name)
 {
 	struct interface_data *iface;
 
@@ -845,7 +845,7 @@ static DBusMessage *properties_set(DBusConnection *connection,
 	const GDBusPropertyTable *property;
 	const char *name, *interface;
 	struct property_data *propdata;
-	gboolean valid_signature;
+	bool valid_signature;
 	char *signature;
 
 	if (!dbus_message_iter_init(message, &iter))
@@ -1171,7 +1171,7 @@ static const GDBusSignalTable manager_signals[] = {
 	{ }
 };
 
-static gboolean add_interface(struct generic_data *data,
+static bool add_interface(struct generic_data *data,
 				const char *name,
 				const GDBusMethodTable *methods,
 				const GDBusSignalTable *signals,
@@ -1286,7 +1286,7 @@ static void object_path_unref(DBusConnection *connection, const char *path)
 	dbus_connection_unregister_object_path(data->conn, data->path);
 }
 
-static gboolean check_signal(DBusConnection *conn, const char *path,
+static bool check_signal(DBusConnection *conn, const char *path,
 				const char *interface, const char *name,
 				const GDBusArgInfo **args)
 {
@@ -1327,7 +1327,7 @@ static gboolean check_signal(DBusConnection *conn, const char *path,
 	return FALSE;
 }
 
-gboolean dbus_register_interface(DBusConnection *connection,
+bool dbus_register_interface(DBusConnection *connection,
 					const char *path, const char *name,
 					const GDBusMethodTable *methods,
 					const GDBusSignalTable *signals,
@@ -1364,7 +1364,7 @@ gboolean dbus_register_interface(DBusConnection *connection,
 	return TRUE;
 }
 
-gboolean dbus_unregister_interface(DBusConnection *connection,
+bool dbus_unregister_interface(DBusConnection *connection,
 					const char *path, const char *name)
 {
 	struct generic_data *data = NULL;
@@ -1390,7 +1390,7 @@ gboolean dbus_unregister_interface(DBusConnection *connection,
 	return TRUE;
 }
 
-gboolean dbus_register_security(const GDBusSecurityTable *security)
+bool dbus_register_security(const GDBusSecurityTable *security)
 {
 	if (security_table != NULL)
 		return FALSE;
@@ -1400,7 +1400,7 @@ gboolean dbus_register_security(const GDBusSecurityTable *security)
 	return TRUE;
 }
 
-gboolean dbus_unregister_security(const GDBusSecurityTable *security)
+bool dbus_unregister_security(const GDBusSecurityTable *security)
 {
 	security_table = NULL;
 
@@ -1481,7 +1481,7 @@ static void dbus_flush(DBusConnection *connection)
 	}
 }
 
-gboolean dbus_send_message(DBusConnection *connection, DBusMessage *message)
+bool dbus_send_message(DBusConnection *connection, DBusMessage *message)
 {
 	dbus_bool_t result = FALSE;
 
@@ -1508,7 +1508,7 @@ out:
 	return result;
 }
 
-gboolean dbus_send_message_with_reply(DBusConnection *connection,
+bool dbus_send_message_with_reply(DBusConnection *connection,
 					DBusMessage *message,
 					DBusPendingCall **call, int timeout)
 {
@@ -1528,7 +1528,7 @@ gboolean dbus_send_message_with_reply(DBusConnection *connection,
 	return ret;
 }
 
-gboolean dbus_send_error_valist(DBusConnection *connection,
+bool dbus_send_error_valist(DBusConnection *connection,
 					DBusMessage *message, const char *name,
 					const char *format, va_list args)
 {
@@ -1541,11 +1541,11 @@ gboolean dbus_send_error_valist(DBusConnection *connection,
 	return dbus_send_message(connection, error);
 }
 
-gboolean dbus_send_error(DBusConnection *connection, DBusMessage *message,
+bool dbus_send_error(DBusConnection *connection, DBusMessage *message,
 				const char *name, const char *format, ...)
 {
 	va_list args;
-	gboolean result;
+	bool result;
 
 	va_start(args, format);
 
@@ -1557,7 +1557,7 @@ gboolean dbus_send_error(DBusConnection *connection, DBusMessage *message,
 	return result;
 }
 
-gboolean dbus_send_reply_valist(DBusConnection *connection,
+bool dbus_send_reply_valist(DBusConnection *connection,
 				DBusMessage *message, int type, va_list args)
 {
 	DBusMessage *reply;
@@ -1574,11 +1574,11 @@ gboolean dbus_send_reply_valist(DBusConnection *connection,
 	return dbus_send_message(connection, reply);
 }
 
-gboolean dbus_send_reply(DBusConnection *connection,
+bool dbus_send_reply(DBusConnection *connection,
 				DBusMessage *message, int type, ...)
 {
 	va_list args;
-	gboolean result;
+	bool result;
 
 	va_start(args, type);
 
@@ -1589,12 +1589,12 @@ gboolean dbus_send_reply(DBusConnection *connection,
 	return result;
 }
 
-gboolean dbus_emit_signal(DBusConnection *connection,
+bool dbus_emit_signal(DBusConnection *connection,
 				const char *path, const char *interface,
 				const char *name, int type, ...)
 {
 	va_list args;
-	gboolean result;
+	bool result;
 
 	va_start(args, type);
 
@@ -1606,7 +1606,7 @@ gboolean dbus_emit_signal(DBusConnection *connection,
 	return result;
 }
 
-gboolean dbus_emit_signal_valist(DBusConnection *connection,
+bool dbus_emit_signal_valist(DBusConnection *connection,
 				const char *path, const char *interface,
 				const char *name, int type, va_list args)
 {
@@ -1763,7 +1763,7 @@ void dbus_emit_property_changed(DBusConnection *connection,
 	add_pending(data);
 }
 
-gboolean dbus_get_properties(DBusConnection *connection, const char *path,
+bool dbus_get_properties(DBusConnection *connection, const char *path,
 				const char *interface, DBusMessageIter *iter)
 {
 	struct generic_data *data;
@@ -1785,7 +1785,7 @@ gboolean dbus_get_properties(DBusConnection *connection, const char *path,
 	return TRUE;
 }
 
-gboolean dbus_attach_object_manager(DBusConnection *connection)
+bool dbus_attach_object_manager(DBusConnection *connection)
 {
 	struct generic_data *data;
 
@@ -1801,7 +1801,7 @@ gboolean dbus_attach_object_manager(DBusConnection *connection)
 	return TRUE;
 }
 
-gboolean dbus_detach_object_manager(DBusConnection *connection)
+bool dbus_detach_object_manager(DBusConnection *connection)
 {
 	if (!dbus_unregister_interface(connection, "/",
 					DBUS_INTERFACE_OBJECT_MANAGER))

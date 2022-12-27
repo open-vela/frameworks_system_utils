@@ -43,16 +43,16 @@ struct GDBusClient {
 	char *service_name;
 	char *base_path;
 	char *root_path;
-	guint watch;
-	guint added_watch;
-	guint removed_watch;
+	unsigned int watch;
+	unsigned int added_watch;
+	unsigned int removed_watch;
 	GPtrArray *match_rules;
 	DBusPendingCall *pending_call;
 	DBusPendingCall *get_objects_call;
 	GDBusWatchFunction connect_func;
 	void *connect_data;
 	GDBusWatchFunction disconn_func;
-	gboolean connected;
+	bool connected;
 	void *disconn_data;
 	GDBusMessageFunction signal_func;
 	void *signal_data;
@@ -71,7 +71,7 @@ struct GDBusProxy {
 	char *obj_path;
 	char *interface;
 	GHashTable *prop_list;
-	guint watch;
+	unsigned int watch;
 	GDBusPropertyFunction prop_func;
 	void *prop_data;
 	GDBusProxyFunction removed_func;
@@ -97,7 +97,7 @@ static void modify_match_reply(DBusPendingCall *call, void *user_data)
 	dbus_message_unref(reply);
 }
 
-static gboolean modify_match(DBusConnection *conn, const char *member,
+static bool modify_match(DBusConnection *conn, const char *member,
 							const char *rule)
 {
 	DBusMessage *msg;
@@ -215,7 +215,7 @@ static void prop_entry_free(gpointer data)
 }
 
 static void add_property(GDBusProxy *proxy, const char *name,
-				DBusMessageIter *iter, gboolean send_changed)
+				DBusMessageIter *iter, bool send_changed)
 {
 	GDBusClient *client = proxy->client;
 	DBusMessageIter value;
@@ -251,7 +251,7 @@ done:
 }
 
 static void update_properties(GDBusProxy *proxy, DBusMessageIter *iter,
-							gboolean send_changed)
+							bool send_changed)
 {
 	DBusMessageIter dict;
 
@@ -357,7 +357,7 @@ static GDBusProxy *proxy_lookup(GDBusClient *client, const char *path,
 	return NULL;
 }
 
-static gboolean properties_changed(DBusConnection *conn, DBusMessage *msg,
+static bool properties_changed(DBusConnection *conn, DBusMessage *msg,
 							void *user_data)
 {
 	GDBusProxy *proxy = user_data;
@@ -533,7 +533,7 @@ const char *dbus_proxy_get_interface(GDBusProxy *proxy)
 	return proxy->interface;
 }
 
-gboolean dbus_proxy_get_property(GDBusProxy *proxy, const char *name,
+bool dbus_proxy_get_property(GDBusProxy *proxy, const char *name,
                                                         DBusMessageIter *iter)
 {
 	struct prop_entry *prop;
@@ -587,7 +587,7 @@ static void refresh_property_reply(DBusPendingCall *call, void *user_data)
 	dbus_message_unref(reply);
 }
 
-gboolean dbus_proxy_refresh_property(GDBusProxy *proxy, const char *name)
+bool dbus_proxy_refresh_property(GDBusProxy *proxy, const char *name)
 {
 	struct refresh_property_data *data;
 	GDBusClient *client;
@@ -664,7 +664,7 @@ static void set_property_reply(DBusPendingCall *call, void *user_data)
 	dbus_message_unref(reply);
 }
 
-gboolean dbus_proxy_set_property_basic(GDBusProxy *proxy,
+bool dbus_proxy_set_property_basic(GDBusProxy *proxy,
 				const char *name, int type, const void *value,
 				GDBusResultFunction function, void *user_data,
 				GDBusDestroyFunction destroy)
@@ -729,7 +729,7 @@ gboolean dbus_proxy_set_property_basic(GDBusProxy *proxy,
 	return TRUE;
 }
 
-gboolean dbus_proxy_set_property_array(GDBusProxy *proxy,
+bool dbus_proxy_set_property_array(GDBusProxy *proxy,
 				const char *name, int type, const void *value,
 				size_t size, GDBusResultFunction function,
 				void *user_data, GDBusDestroyFunction destroy)
@@ -836,7 +836,7 @@ static void method_call_reply(DBusPendingCall *call, void *user_data)
 	dbus_message_unref(reply);
 }
 
-gboolean dbus_proxy_method_call(GDBusProxy *proxy, const char *method,
+bool dbus_proxy_method_call(GDBusProxy *proxy, const char *method,
 				GDBusSetupFunction setup,
 				GDBusReturnFunction function, void *user_data,
 				GDBusDestroyFunction destroy)
@@ -890,7 +890,7 @@ gboolean dbus_proxy_method_call(GDBusProxy *proxy, const char *method,
 	return TRUE;
 }
 
-gboolean dbus_proxy_set_property_watch(GDBusProxy *proxy,
+bool dbus_proxy_set_property_watch(GDBusProxy *proxy,
 			GDBusPropertyFunction function, void *user_data)
 {
 	if (proxy == NULL)
@@ -902,7 +902,7 @@ gboolean dbus_proxy_set_property_watch(GDBusProxy *proxy,
 	return TRUE;
 }
 
-gboolean dbus_proxy_set_removed_watch(GDBusProxy *proxy,
+bool dbus_proxy_set_removed_watch(GDBusProxy *proxy,
 				GDBusProxyFunction function, void *user_data)
 {
 	if (proxy == NULL)
@@ -983,7 +983,7 @@ static void parse_interfaces(GDBusClient *client, const char *path,
 	}
 }
 
-static gboolean interfaces_added(DBusConnection *conn, DBusMessage *msg,
+static bool interfaces_added(DBusConnection *conn, DBusMessage *msg,
 							void *user_data)
 {
 	GDBusClient *client = user_data;
@@ -1008,7 +1008,7 @@ static gboolean interfaces_added(DBusConnection *conn, DBusMessage *msg,
 	return TRUE;
 }
 
-static gboolean interfaces_removed(DBusConnection *conn, DBusMessage *msg,
+static bool interfaces_removed(DBusConnection *conn, DBusMessage *msg,
 							void *user_data)
 {
 	GDBusClient *client = user_data;
@@ -1329,7 +1329,7 @@ void dbus_client_unref(GDBusClient *client)
 	g_free(client);
 }
 
-gboolean dbus_client_set_connect_watch(GDBusClient *client,
+bool dbus_client_set_connect_watch(GDBusClient *client,
 				GDBusWatchFunction function, void *user_data)
 {
 	if (client == NULL)
@@ -1341,7 +1341,7 @@ gboolean dbus_client_set_connect_watch(GDBusClient *client,
 	return TRUE;
 }
 
-gboolean dbus_client_set_disconnect_watch(GDBusClient *client,
+bool dbus_client_set_disconnect_watch(GDBusClient *client,
 				GDBusWatchFunction function, void *user_data)
 {
 	if (client == NULL)
@@ -1353,7 +1353,7 @@ gboolean dbus_client_set_disconnect_watch(GDBusClient *client,
 	return TRUE;
 }
 
-gboolean dbus_client_set_signal_watch(GDBusClient *client,
+bool dbus_client_set_signal_watch(GDBusClient *client,
 				GDBusMessageFunction function, void *user_data)
 {
 	if (client == NULL)
@@ -1365,7 +1365,7 @@ gboolean dbus_client_set_signal_watch(GDBusClient *client,
 	return TRUE;
 }
 
-gboolean dbus_client_set_ready_watch(GDBusClient *client,
+bool dbus_client_set_ready_watch(GDBusClient *client,
 				GDBusClientFunction ready, void *user_data)
 {
 	if (client == NULL)
@@ -1377,7 +1377,7 @@ gboolean dbus_client_set_ready_watch(GDBusClient *client,
 	return TRUE;
 }
 
-gboolean dbus_client_set_proxy_handlers(GDBusClient *client,
+bool dbus_client_set_proxy_handlers(GDBusClient *client,
 					GDBusProxyFunction proxy_added,
 					GDBusProxyFunction proxy_removed,
 					GDBusPropertyFunction property_changed,

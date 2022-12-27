@@ -32,7 +32,7 @@
 #include <glib.h>
 
 int polkit_check_authorization(DBusConnection *conn,
-				const char *action, gboolean interaction,
+				const char *action, bool interaction,
 				void (*function) (dbus_bool_t authorized,
 							void *user_data),
 						void *user_data, int timeout);
@@ -143,7 +143,7 @@ done:
 #define AUTHORITY_PATH	"/org/freedesktop/PolicyKit1/Authority"
 
 int polkit_check_authorization(DBusConnection *conn,
-				const char *action, gboolean interaction,
+				const char *action, bool interaction,
 				void (*function) (dbus_bool_t authorized,
 							void *user_data),
 						void *user_data, int timeout)
