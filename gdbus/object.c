@@ -272,7 +272,7 @@ static DBusHandlerResult process_message(DBusConnection *connection,
 	if (reply == NULL)
 		return DBUS_HANDLER_RESULT_NEED_MEMORY;
 
-	g_dbus_send_message(connection, reply);
+	dbus_send_message(connection, reply);
 
 	return DBUS_HANDLER_RESULT_HANDLED;
 }
@@ -282,7 +282,7 @@ static GSList *pending_security = NULL;
 
 static const GDBusSecurityTable *security_table = NULL;
 
-void g_dbus_pending_success(DBusConnection *connection,
+void dbus_pending_success(DBusConnection *connection,
 					GDBusPendingReply pending_reply)
 {
 	GSList *list;
@@ -304,7 +304,7 @@ void g_dbus_pending_success(DBusConnection *connection,
 	}
 }
 
-void g_dbus_pending_error_valist(DBusConnection *connection,
+void dbus_pending_error_valist(DBusConnection *connection,
 				GDBusPendingReply pending_reply, const char *name,
 					const char *format, va_list args)
 {
@@ -318,7 +318,7 @@ void g_dbus_pending_error_valist(DBusConnection *connection,
 
 		pending_security = g_slist_remove(pending_security, secdata);
 
-		g_dbus_send_error_valist(connection, secdata->message,
+		dbus_send_error_valist(connection, secdata->message,
 							name, format, args);
 
 		dbus_message_unref(secdata->message);
@@ -327,7 +327,7 @@ void g_dbus_pending_error_valist(DBusConnection *connection,
 	}
 }
 
-void g_dbus_pending_error(DBusConnection *connection,
+void dbus_pending_error(DBusConnection *connection,
 				GDBusPendingReply pending_reply,
 				const char *name, const char *format, ...)
 {
@@ -335,7 +335,7 @@ void g_dbus_pending_error(DBusConnection *connection,
 
 	va_start(args, format);
 
-	g_dbus_pending_error_valist(connection, pending_reply, name, format, args);
+	dbus_pending_error_valist(connection, pending_reply, name, format, args);
 
 	va_end(args);
 }
@@ -356,9 +356,9 @@ static void builtin_security_result(dbus_bool_t authorized, void *user_data)
 	struct builtin_security_data *data = user_data;
 
 	if (authorized == TRUE)
-		g_dbus_pending_success(data->conn, data->pending);
+		dbus_pending_success(data->conn, data->pending);
 	else
-		g_dbus_pending_error(data->conn, data->pending,
+		dbus_pending_error(data->conn, data->pending,
 						DBUS_ERROR_AUTH_FAILED, NULL);
 
 	g_free(data);
@@ -377,7 +377,7 @@ static void builtin_security_function(DBusConnection *conn,
 
 	if (polkit_check_authorization(conn, action, interaction,
 				builtin_security_result, data, 30000) < 0)
-		g_dbus_pending_error(conn, pending_reply, NULL, NULL);
+		dbus_pending_error(conn, pending_reply, NULL, NULL);
 }
 
 static gboolean check_privilege(DBusConnection *conn, DBusMessage *msg,
@@ -445,7 +445,7 @@ static struct property_data *remove_pending_property_data(
 	return propdata;
 }
 
-void g_dbus_pending_property_success(GDBusPendingPropertySet id)
+void dbus_pending_property_success(GDBusPendingPropertySet id)
 {
 	struct property_data *propdata;
 
@@ -453,13 +453,13 @@ void g_dbus_pending_property_success(GDBusPendingPropertySet id)
 	if (propdata == NULL)
 		return;
 
-	g_dbus_send_reply(propdata->conn, propdata->message,
+	dbus_send_reply(propdata->conn, propdata->message,
 							DBUS_TYPE_INVALID);
 	dbus_message_unref(propdata->message);
 	g_free(propdata);
 }
 
-void g_dbus_pending_property_error_valist(GDBusPendingReply id,
+void dbus_pending_property_error_valist(GDBusPendingReply id,
 					const char *name, const char *format,
 					va_list args)
 {
@@ -469,21 +469,21 @@ void g_dbus_pending_property_error_valist(GDBusPendingReply id,
 	if (propdata == NULL)
 		return;
 
-	g_dbus_send_error_valist(propdata->conn, propdata->message, name,
+	dbus_send_error_valist(propdata->conn, propdata->message, name,
 								format, args);
 
 	dbus_message_unref(propdata->message);
 	g_free(propdata);
 }
 
-void g_dbus_pending_property_error(GDBusPendingReply id, const char *name,
+void dbus_pending_property_error(GDBusPendingReply id, const char *name,
 						const char *format, ...)
 {
 	va_list args;
 
 	va_start(args, format);
 
-	g_dbus_pending_property_error_valist(id, name, format, args);
+	dbus_pending_property_error_valist(id, name, format, args);
 
 	va_end(args);
 }
@@ -589,7 +589,7 @@ static void emit_interfaces_added(struct generic_data *data)
 
 	dbus_message_iter_close_container(&iter, &array);
 
-	/* Use dbus_connection_send to avoid recursive calls to g_dbus_flush */
+	/* Use dbus_connection_send to avoid recursive calls to dbus_flush */
 	dbus_connection_send(data->conn, signal, NULL);
 	dbus_message_unref(signal);
 }
@@ -611,7 +611,7 @@ static struct interface_data *find_interface(GSList *interfaces,
 	return NULL;
 }
 
-static gboolean g_dbus_args_have_signature(const GDBusArgInfo *args,
+static gboolean dbus_args_have_signature(const GDBusArgInfo *args,
 							DBusMessage *message)
 {
 	const char *sig = dbus_message_get_signature(message);
@@ -771,21 +771,21 @@ static DBusMessage *properties_get(DBusConnection *connection,
 
 	iface = find_interface(data->interfaces, interface);
 	if (iface == NULL)
-		return g_dbus_create_error(message, DBUS_ERROR_INVALID_ARGS,
+		return dbus_create_error(message, DBUS_ERROR_INVALID_ARGS,
 				"No such interface '%s'", interface);
 
 	property = find_property(iface->properties, name);
 	if (property == NULL)
-		return g_dbus_create_error(message, DBUS_ERROR_INVALID_ARGS,
+		return dbus_create_error(message, DBUS_ERROR_INVALID_ARGS,
 				"No such property '%s'", name);
 
 	if (property->exists != NULL &&
 			!property->exists(property, iface->user_data))
-		return g_dbus_create_error(message, DBUS_ERROR_INVALID_ARGS,
+		return dbus_create_error(message, DBUS_ERROR_INVALID_ARGS,
 					"No such property '%s'", name);
 
 	if (property->get == NULL)
-		return g_dbus_create_error(message, DBUS_ERROR_INVALID_ARGS,
+		return dbus_create_error(message, DBUS_ERROR_INVALID_ARGS,
 				"Property '%s' is not readable", name);
 
 	reply = dbus_message_new_method_return(message);
@@ -822,7 +822,7 @@ static DBusMessage *properties_get_all(DBusConnection *connection,
 
 	iface = find_interface(data->interfaces, interface);
 	if (iface == NULL)
-		return g_dbus_create_error(message, DBUS_ERROR_INVALID_ARGS,
+		return dbus_create_error(message, DBUS_ERROR_INVALID_ARGS,
 					"No such interface '%s'", interface);
 
 	reply = dbus_message_new_method_return(message);
@@ -849,11 +849,11 @@ static DBusMessage *properties_set(DBusConnection *connection,
 	char *signature;
 
 	if (!dbus_message_iter_init(message, &iter))
-		return g_dbus_create_error(message, DBUS_ERROR_INVALID_ARGS,
+		return dbus_create_error(message, DBUS_ERROR_INVALID_ARGS,
 							"No arguments given");
 
 	if (dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_STRING)
-		return g_dbus_create_error(message, DBUS_ERROR_INVALID_ARGS,
+		return dbus_create_error(message, DBUS_ERROR_INVALID_ARGS,
 					"Invalid argument type: '%c'",
 					dbus_message_iter_get_arg_type(&iter));
 
@@ -861,7 +861,7 @@ static DBusMessage *properties_set(DBusConnection *connection,
 	dbus_message_iter_next(&iter);
 
 	if (dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_STRING)
-		return g_dbus_create_error(message, DBUS_ERROR_INVALID_ARGS,
+		return dbus_create_error(message, DBUS_ERROR_INVALID_ARGS,
 					"Invalid argument type: '%c'",
 					dbus_message_iter_get_arg_type(&iter));
 
@@ -869,7 +869,7 @@ static DBusMessage *properties_set(DBusConnection *connection,
 	dbus_message_iter_next(&iter);
 
 	if (dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_VARIANT)
-		return g_dbus_create_error(message, DBUS_ERROR_INVALID_ARGS,
+		return dbus_create_error(message, DBUS_ERROR_INVALID_ARGS,
 					"Invalid argument type: '%c'",
 					dbus_message_iter_get_arg_type(&iter));
 
@@ -877,23 +877,23 @@ static DBusMessage *properties_set(DBusConnection *connection,
 
 	iface = find_interface(data->interfaces, interface);
 	if (iface == NULL)
-		return g_dbus_create_error(message, DBUS_ERROR_INVALID_ARGS,
+		return dbus_create_error(message, DBUS_ERROR_INVALID_ARGS,
 					"No such interface '%s'", interface);
 
 	property = find_property(iface->properties, name);
 	if (property == NULL)
-		return g_dbus_create_error(message,
+		return dbus_create_error(message,
 						DBUS_ERROR_UNKNOWN_PROPERTY,
 						"No such property '%s'", name);
 
 	if (property->set == NULL)
-		return g_dbus_create_error(message,
+		return dbus_create_error(message,
 					DBUS_ERROR_PROPERTY_READ_ONLY,
 					"Property '%s' is not writable", name);
 
 	if (property->exists != NULL &&
 			!property->exists(property, iface->user_data))
-		return g_dbus_create_error(message,
+		return dbus_create_error(message,
 						DBUS_ERROR_UNKNOWN_PROPERTY,
 						"No such property '%s'", name);
 
@@ -901,7 +901,7 @@ static DBusMessage *properties_set(DBusConnection *connection,
 	valid_signature = strcmp(signature, property->type) ? FALSE : TRUE;
 	dbus_free(signature);
 	if (!valid_signature)
-		return g_dbus_create_error(message,
+		return dbus_create_error(message,
 					DBUS_ERROR_INVALID_SIGNATURE,
 					"Invalid signature for '%s'", name);
 
@@ -975,7 +975,7 @@ static void emit_interfaces_removed(struct generic_data *data)
 
 	dbus_message_iter_close_container(&iter, &array);
 
-	/* Use dbus_connection_send to avoid recursive calls to g_dbus_flush */
+	/* Use dbus_connection_send to avoid recursive calls to dbus_flush */
 	dbus_connection_send(data->conn, signal, NULL);
 	dbus_message_unref(signal);
 }
@@ -1059,7 +1059,7 @@ static DBusHandlerResult generic_message(DBusConnection *connection,
 					G_DBUS_METHOD_FLAG_EXPERIMENTAL))
 			return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
-		if (g_dbus_args_have_signature(method->in_args,
+		if (dbus_args_have_signature(method->in_args,
 							message) == FALSE)
 			continue;
 
@@ -1327,7 +1327,7 @@ static gboolean check_signal(DBusConnection *conn, const char *path,
 	return FALSE;
 }
 
-gboolean g_dbus_register_interface(DBusConnection *connection,
+gboolean dbus_register_interface(DBusConnection *connection,
 					const char *path, const char *name,
 					const GDBusMethodTable *methods,
 					const GDBusSignalTable *signals,
@@ -1364,7 +1364,7 @@ gboolean g_dbus_register_interface(DBusConnection *connection,
 	return TRUE;
 }
 
-gboolean g_dbus_unregister_interface(DBusConnection *connection,
+gboolean dbus_unregister_interface(DBusConnection *connection,
 					const char *path, const char *name)
 {
 	struct generic_data *data = NULL;
@@ -1390,7 +1390,7 @@ gboolean g_dbus_unregister_interface(DBusConnection *connection,
 	return TRUE;
 }
 
-gboolean g_dbus_register_security(const GDBusSecurityTable *security)
+gboolean dbus_register_security(const GDBusSecurityTable *security)
 {
 	if (security_table != NULL)
 		return FALSE;
@@ -1400,14 +1400,14 @@ gboolean g_dbus_register_security(const GDBusSecurityTable *security)
 	return TRUE;
 }
 
-gboolean g_dbus_unregister_security(const GDBusSecurityTable *security)
+gboolean dbus_unregister_security(const GDBusSecurityTable *security)
 {
 	security_table = NULL;
 
 	return TRUE;
 }
 
-DBusMessage *g_dbus_create_error_valist(DBusMessage *message, const char *name,
+DBusMessage *dbus_create_error_valist(DBusMessage *message, const char *name,
 					const char *format, va_list args)
 {
 	char str[1024];
@@ -1420,7 +1420,7 @@ DBusMessage *g_dbus_create_error_valist(DBusMessage *message, const char *name,
 	return dbus_message_new_error(message, name, str);
 }
 
-DBusMessage *g_dbus_create_error(DBusMessage *message, const char *name,
+DBusMessage *dbus_create_error(DBusMessage *message, const char *name,
 						const char *format, ...)
 {
 	va_list args;
@@ -1428,14 +1428,14 @@ DBusMessage *g_dbus_create_error(DBusMessage *message, const char *name,
 
 	va_start(args, format);
 
-	reply = g_dbus_create_error_valist(message, name, format, args);
+	reply = dbus_create_error_valist(message, name, format, args);
 
 	va_end(args);
 
 	return reply;
 }
 
-DBusMessage *g_dbus_create_reply_valist(DBusMessage *message,
+DBusMessage *dbus_create_reply_valist(DBusMessage *message,
 						int type, va_list args)
 {
 	DBusMessage *reply;
@@ -1452,21 +1452,21 @@ DBusMessage *g_dbus_create_reply_valist(DBusMessage *message,
 	return reply;
 }
 
-DBusMessage *g_dbus_create_reply(DBusMessage *message, int type, ...)
+DBusMessage *dbus_create_reply(DBusMessage *message, int type, ...)
 {
 	va_list args;
 	DBusMessage *reply;
 
 	va_start(args, type);
 
-	reply = g_dbus_create_reply_valist(message, type, args);
+	reply = dbus_create_reply_valist(message, type, args);
 
 	va_end(args);
 
 	return reply;
 }
 
-static void g_dbus_flush(DBusConnection *connection)
+static void dbus_flush(DBusConnection *connection)
 {
 	GSList *l;
 
@@ -1481,7 +1481,7 @@ static void g_dbus_flush(DBusConnection *connection)
 	}
 }
 
-gboolean g_dbus_send_message(DBusConnection *connection, DBusMessage *message)
+gboolean dbus_send_message(DBusConnection *connection, DBusMessage *message)
 {
 	dbus_bool_t result = FALSE;
 
@@ -1498,7 +1498,7 @@ gboolean g_dbus_send_message(DBusConnection *connection, DBusMessage *message)
 	}
 
 	/* Flush pending signal to guarantee message order */
-	g_dbus_flush(connection);
+	dbus_flush(connection);
 
 	result = dbus_connection_send(connection, message, NULL);
 
@@ -1508,14 +1508,14 @@ out:
 	return result;
 }
 
-gboolean g_dbus_send_message_with_reply(DBusConnection *connection,
+gboolean dbus_send_message_with_reply(DBusConnection *connection,
 					DBusMessage *message,
 					DBusPendingCall **call, int timeout)
 {
 	dbus_bool_t ret;
 
 	/* Flush pending signal to guarantee message order */
-	g_dbus_flush(connection);
+	dbus_flush(connection);
 
 	ret = dbus_connection_send_with_reply(connection, message, call,
 								timeout);
@@ -1528,20 +1528,20 @@ gboolean g_dbus_send_message_with_reply(DBusConnection *connection,
 	return ret;
 }
 
-gboolean g_dbus_send_error_valist(DBusConnection *connection,
+gboolean dbus_send_error_valist(DBusConnection *connection,
 					DBusMessage *message, const char *name,
 					const char *format, va_list args)
 {
 	DBusMessage *error;
 
-	error = g_dbus_create_error_valist(message, name, format, args);
+	error = dbus_create_error_valist(message, name, format, args);
 	if (error == NULL)
 		return FALSE;
 
-	return g_dbus_send_message(connection, error);
+	return dbus_send_message(connection, error);
 }
 
-gboolean g_dbus_send_error(DBusConnection *connection, DBusMessage *message,
+gboolean dbus_send_error(DBusConnection *connection, DBusMessage *message,
 				const char *name, const char *format, ...)
 {
 	va_list args;
@@ -1549,7 +1549,7 @@ gboolean g_dbus_send_error(DBusConnection *connection, DBusMessage *message,
 
 	va_start(args, format);
 
-	result = g_dbus_send_error_valist(connection, message, name,
+	result = dbus_send_error_valist(connection, message, name,
 							format, args);
 
 	va_end(args);
@@ -1557,7 +1557,7 @@ gboolean g_dbus_send_error(DBusConnection *connection, DBusMessage *message,
 	return result;
 }
 
-gboolean g_dbus_send_reply_valist(DBusConnection *connection,
+gboolean dbus_send_reply_valist(DBusConnection *connection,
 				DBusMessage *message, int type, va_list args)
 {
 	DBusMessage *reply;
@@ -1571,10 +1571,10 @@ gboolean g_dbus_send_reply_valist(DBusConnection *connection,
 		return FALSE;
 	}
 
-	return g_dbus_send_message(connection, reply);
+	return dbus_send_message(connection, reply);
 }
 
-gboolean g_dbus_send_reply(DBusConnection *connection,
+gboolean dbus_send_reply(DBusConnection *connection,
 				DBusMessage *message, int type, ...)
 {
 	va_list args;
@@ -1582,14 +1582,14 @@ gboolean g_dbus_send_reply(DBusConnection *connection,
 
 	va_start(args, type);
 
-	result = g_dbus_send_reply_valist(connection, message, type, args);
+	result = dbus_send_reply_valist(connection, message, type, args);
 
 	va_end(args);
 
 	return result;
 }
 
-gboolean g_dbus_emit_signal(DBusConnection *connection,
+gboolean dbus_emit_signal(DBusConnection *connection,
 				const char *path, const char *interface,
 				const char *name, int type, ...)
 {
@@ -1598,7 +1598,7 @@ gboolean g_dbus_emit_signal(DBusConnection *connection,
 
 	va_start(args, type);
 
-	result = g_dbus_emit_signal_valist(connection, path, interface,
+	result = dbus_emit_signal_valist(connection, path, interface,
 							name, type, args);
 
 	va_end(args);
@@ -1606,7 +1606,7 @@ gboolean g_dbus_emit_signal(DBusConnection *connection,
 	return result;
 }
 
-gboolean g_dbus_emit_signal_valist(DBusConnection *connection,
+gboolean dbus_emit_signal_valist(DBusConnection *connection,
 				const char *path, const char *interface,
 				const char *name, int type, va_list args)
 {
@@ -1627,14 +1627,14 @@ gboolean g_dbus_emit_signal_valist(DBusConnection *connection,
 	if (!ret)
 		goto fail;
 
-	if (g_dbus_args_have_signature(args_info, signal) == FALSE) {
+	if (dbus_args_have_signature(args_info, signal) == FALSE) {
 		error("%s.%s: got unexpected signature '%s'", interface, name,
 					dbus_message_get_signature(signal));
 		ret = FALSE;
 		goto fail;
 	}
 
-	return g_dbus_send_message(connection, signal);
+	return dbus_send_message(connection, signal);
 
 fail:
 	dbus_message_unref(signal);
@@ -1704,7 +1704,7 @@ static void process_properties_from_interface(struct generic_data *data,
 	g_slist_free(iface->pending_prop);
 	iface->pending_prop = NULL;
 
-	/* Use dbus_connection_send to avoid recursive calls to g_dbus_flush */
+	/* Use dbus_connection_send to avoid recursive calls to dbus_flush */
 	dbus_connection_send(data->conn, signal, NULL);
 	dbus_message_unref(signal);
 }
@@ -1720,7 +1720,7 @@ static void process_property_changes(struct generic_data *data)
 	}
 }
 
-void g_dbus_emit_property_changed(DBusConnection *connection,
+void dbus_emit_property_changed(DBusConnection *connection,
 				const char *path, const char *interface,
 				const char *name)
 {
@@ -1763,7 +1763,7 @@ void g_dbus_emit_property_changed(DBusConnection *connection,
 	add_pending(data);
 }
 
-gboolean g_dbus_get_properties(DBusConnection *connection, const char *path,
+gboolean dbus_get_properties(DBusConnection *connection, const char *path,
 				const char *interface, DBusMessageIter *iter)
 {
 	struct generic_data *data;
@@ -1785,7 +1785,7 @@ gboolean g_dbus_get_properties(DBusConnection *connection, const char *path,
 	return TRUE;
 }
 
-gboolean g_dbus_attach_object_manager(DBusConnection *connection)
+gboolean dbus_attach_object_manager(DBusConnection *connection)
 {
 	struct generic_data *data;
 
@@ -1801,9 +1801,9 @@ gboolean g_dbus_attach_object_manager(DBusConnection *connection)
 	return TRUE;
 }
 
-gboolean g_dbus_detach_object_manager(DBusConnection *connection)
+gboolean dbus_detach_object_manager(DBusConnection *connection)
 {
-	if (!g_dbus_unregister_interface(connection, "/",
+	if (!dbus_unregister_interface(connection, "/",
 					DBUS_INTERFACE_OBJECT_MANAGER))
 		return FALSE;
 
@@ -1812,12 +1812,12 @@ gboolean g_dbus_detach_object_manager(DBusConnection *connection)
 	return TRUE;
 }
 
-void g_dbus_set_flags(int flags)
+void dbus_set_flags(int flags)
 {
 	global_flags = flags;
 }
 
-int g_dbus_get_flags(void)
+int dbus_get_flags(void)
 {
 	return global_flags;
 }
