@@ -29,7 +29,10 @@ extern "C" {
 #endif
 
 #include <dbus/dbus.h>
-#include <glib.h>
+
+#define gboolean int
+#define guint unsigned int
+#define guint32 uint32_t
 
 #define g_dbus_setup_bus dbus_setup_bus
 #define g_dbus_setup_private dbus_setup_private
@@ -108,7 +111,7 @@ typedef void (* GDBusWatchFunction) (DBusConnection *connection,
 typedef void (* GDBusMessageFunction) (DBusConnection *connection,
 					 DBusMessage *message, void *user_data);
 
-typedef gboolean (* GDBusSignalFunction) (DBusConnection *connection,
+typedef bool (* GDBusSignalFunction) (DBusConnection *connection,
 					DBusMessage *message, void *user_data);
 
 DBusConnection *dbus_setup_bus(DBusBusType type, const char *name,
@@ -117,10 +120,10 @@ DBusConnection *dbus_setup_bus(DBusBusType type, const char *name,
 DBusConnection *dbus_setup_private(DBusBusType type, const char *name,
 							DBusError *error);
 
-gboolean dbus_request_name(DBusConnection *connection, const char *name,
+bool dbus_request_name(DBusConnection *connection, const char *name,
 							DBusError *error);
 
-gboolean dbus_set_disconnect_function(DBusConnection *connection,
+bool dbus_set_disconnect_function(DBusConnection *connection,
 				GDBusWatchFunction function,
 				void *user_data, DBusFreeFunction destroy);
 
@@ -129,23 +132,23 @@ typedef void (* GDBusDestroyFunction) (void *user_data);
 typedef DBusMessage * (* GDBusMethodFunction) (DBusConnection *connection,
 					DBusMessage *message, void *user_data);
 
-typedef gboolean (*GDBusPropertyGetter)(const GDBusPropertyTable *property,
+typedef bool (*GDBusPropertyGetter)(const GDBusPropertyTable *property,
 					DBusMessageIter *iter, void *data);
 
-typedef guint32 GDBusPendingPropertySet;
+typedef uint32_t GDBusPendingPropertySet;
 
 typedef void (*GDBusPropertySetter)(const GDBusPropertyTable *property,
 			DBusMessageIter *value, GDBusPendingPropertySet id,
 			void *data);
 
-typedef gboolean (*GDBusPropertyExists)(const GDBusPropertyTable *property,
+typedef bool (*GDBusPropertyExists)(const GDBusPropertyTable *property,
 								void *data);
 
-typedef guint32 GDBusPendingReply;
+typedef uint32_t GDBusPendingReply;
 
 typedef void (* GDBusSecurityFunction) (DBusConnection *connection,
 						const char *action,
-						gboolean interaction,
+						bool interaction,
 						GDBusPendingReply pending);
 
 enum GDBusFlags {
@@ -278,18 +281,18 @@ struct GDBusSecurityTable {
 void dbus_set_flags(int flags);
 int dbus_get_flags(void);
 
-gboolean dbus_register_interface(DBusConnection *connection,
+bool dbus_register_interface(DBusConnection *connection,
 					const char *path, const char *name,
 					const GDBusMethodTable *methods,
 					const GDBusSignalTable *signals,
 					const GDBusPropertyTable *properties,
 					void *user_data,
 					GDBusDestroyFunction destroy);
-gboolean dbus_unregister_interface(DBusConnection *connection,
+bool dbus_unregister_interface(DBusConnection *connection,
 					const char *path, const char *name);
 
-gboolean dbus_register_security(const GDBusSecurityTable *security);
-gboolean dbus_unregister_security(const GDBusSecurityTable *security);
+bool dbus_register_security(const GDBusSecurityTable *security);
+bool dbus_unregister_security(const GDBusSecurityTable *security);
 
 void dbus_pending_success(DBusConnection *connection,
 					GDBusPendingReply pending);
@@ -310,46 +313,46 @@ DBusMessage *dbus_create_reply(DBusMessage *message, int type, ...);
 DBusMessage *dbus_create_reply_valist(DBusMessage *message,
 						int type, va_list args);
 
-gboolean dbus_send_message(DBusConnection *connection, DBusMessage *message);
-gboolean dbus_send_message_with_reply(DBusConnection *connection,
+bool dbus_send_message(DBusConnection *connection, DBusMessage *message);
+bool dbus_send_message_with_reply(DBusConnection *connection,
 					DBusMessage *message,
 					DBusPendingCall **call, int timeout);
-gboolean dbus_send_error(DBusConnection *connection, DBusMessage *message,
+bool dbus_send_error(DBusConnection *connection, DBusMessage *message,
 				const char *name, const char *format, ...)
 					 __attribute__((format(printf, 4, 5)));
-gboolean dbus_send_error_valist(DBusConnection *connection,
+bool dbus_send_error_valist(DBusConnection *connection,
 					DBusMessage *message, const char *name,
 					const char *format, va_list args);
-gboolean dbus_send_reply(DBusConnection *connection,
+bool dbus_send_reply(DBusConnection *connection,
 				DBusMessage *message, int type, ...);
-gboolean dbus_send_reply_valist(DBusConnection *connection,
+bool dbus_send_reply_valist(DBusConnection *connection,
 				DBusMessage *message, int type, va_list args);
 
-gboolean dbus_emit_signal(DBusConnection *connection,
+bool dbus_emit_signal(DBusConnection *connection,
 				const char *path, const char *interface,
 				const char *name, int type, ...);
-gboolean dbus_emit_signal_valist(DBusConnection *connection,
+bool dbus_emit_signal_valist(DBusConnection *connection,
 				const char *path, const char *interface,
 				const char *name, int type, va_list args);
 
-guint dbus_add_service_watch(DBusConnection *connection, const char *name,
+unsigned int dbus_add_service_watch(DBusConnection *connection, const char *name,
 				GDBusWatchFunction connect,
 				GDBusWatchFunction disconnect,
 				void *user_data, GDBusDestroyFunction destroy);
-guint dbus_add_disconnect_watch(DBusConnection *connection, const char *name,
+unsigned int dbus_add_disconnect_watch(DBusConnection *connection, const char *name,
 				GDBusWatchFunction function,
 				void *user_data, GDBusDestroyFunction destroy);
-guint dbus_add_signal_watch(DBusConnection *connection,
+unsigned int dbus_add_signal_watch(DBusConnection *connection,
 				const char *sender, const char *path,
 				const char *interface, const char *member,
 				GDBusSignalFunction function, void *user_data,
 				GDBusDestroyFunction destroy);
-guint dbus_add_properties_watch(DBusConnection *connection,
+unsigned int dbus_add_properties_watch(DBusConnection *connection,
 				const char *sender, const char *path,
 				const char *interface,
 				GDBusSignalFunction function, void *user_data,
 				GDBusDestroyFunction destroy);
-gboolean dbus_remove_watch(DBusConnection *connection, guint tag);
+bool dbus_remove_watch(DBusConnection *connection, unsigned int tag);
 void dbus_remove_all_watches(DBusConnection *connection);
 
 void dbus_pending_property_success(GDBusPendingPropertySet id);
@@ -360,11 +363,11 @@ void dbus_pending_property_error(GDBusPendingReply id, const char *name,
 void dbus_emit_property_changed(DBusConnection *connection,
 				const char *path, const char *interface,
 				const char *name);
-gboolean dbus_get_properties(DBusConnection *connection, const char *path,
+bool dbus_get_properties(DBusConnection *connection, const char *path,
 				const char *interface, DBusMessageIter *iter);
 
-gboolean dbus_attach_object_manager(DBusConnection *connection);
-gboolean dbus_detach_object_manager(DBusConnection *connection);
+bool dbus_attach_object_manager(DBusConnection *connection);
+bool dbus_detach_object_manager(DBusConnection *connection);
 
 typedef struct GDBusClient GDBusClient;
 typedef struct GDBusProxy GDBusProxy;
@@ -378,19 +381,19 @@ void dbus_proxy_unref(GDBusProxy *proxy);
 const char *dbus_proxy_get_path(GDBusProxy *proxy);
 const char *dbus_proxy_get_interface(GDBusProxy *proxy);
 
-gboolean dbus_proxy_get_property(GDBusProxy *proxy, const char *name,
+bool dbus_proxy_get_property(GDBusProxy *proxy, const char *name,
 							DBusMessageIter *iter);
 
-gboolean dbus_proxy_refresh_property(GDBusProxy *proxy, const char *name);
+bool dbus_proxy_refresh_property(GDBusProxy *proxy, const char *name);
 
 typedef void (* GDBusResultFunction) (const DBusError *error, void *user_data);
 
-gboolean dbus_proxy_set_property_basic(GDBusProxy *proxy,
+bool dbus_proxy_set_property_basic(GDBusProxy *proxy,
 				const char *name, int type, const void *value,
 				GDBusResultFunction function, void *user_data,
 				GDBusDestroyFunction destroy);
 
-gboolean dbus_proxy_set_property_array(GDBusProxy *proxy,
+bool dbus_proxy_set_property_array(GDBusProxy *proxy,
 				const char *name, int type, const void *value,
 				size_t size, GDBusResultFunction function,
 				void *user_data, GDBusDestroyFunction destroy);
@@ -398,7 +401,7 @@ gboolean dbus_proxy_set_property_array(GDBusProxy *proxy,
 typedef void (* GDBusSetupFunction) (DBusMessageIter *iter, void *user_data);
 typedef void (* GDBusReturnFunction) (DBusMessage *message, void *user_data);
 
-gboolean dbus_proxy_method_call(GDBusProxy *proxy, const char *method,
+bool dbus_proxy_method_call(GDBusProxy *proxy, const char *method,
 				GDBusSetupFunction setup,
 				GDBusReturnFunction function, void *user_data,
 				GDBusDestroyFunction destroy);
@@ -408,10 +411,10 @@ typedef void (* GDBusProxyFunction) (GDBusProxy *proxy, void *user_data);
 typedef void (* GDBusPropertyFunction) (GDBusProxy *proxy, const char *name,
 					DBusMessageIter *iter, void *user_data);
 
-gboolean dbus_proxy_set_property_watch(GDBusProxy *proxy,
+bool dbus_proxy_set_property_watch(GDBusProxy *proxy,
 			GDBusPropertyFunction function, void *user_data);
 
-gboolean dbus_proxy_set_removed_watch(GDBusProxy *proxy,
+bool dbus_proxy_set_removed_watch(GDBusProxy *proxy,
 			GDBusProxyFunction destroy, void *user_data);
 
 GDBusClient *dbus_client_new(DBusConnection *connection,
@@ -424,15 +427,15 @@ GDBusClient *dbus_client_new_full(DBusConnection *connection,
 GDBusClient *dbus_client_ref(GDBusClient *client);
 void dbus_client_unref(GDBusClient *client);
 
-gboolean dbus_client_set_connect_watch(GDBusClient *client,
+bool dbus_client_set_connect_watch(GDBusClient *client,
 				GDBusWatchFunction function, void *user_data);
-gboolean dbus_client_set_disconnect_watch(GDBusClient *client,
+bool dbus_client_set_disconnect_watch(GDBusClient *client,
 				GDBusWatchFunction function, void *user_data);
-gboolean dbus_client_set_signal_watch(GDBusClient *client,
+bool dbus_client_set_signal_watch(GDBusClient *client,
 				GDBusMessageFunction function, void *user_data);
-gboolean dbus_client_set_ready_watch(GDBusClient *client,
+bool dbus_client_set_ready_watch(GDBusClient *client,
 				GDBusClientFunction ready, void *user_data);
-gboolean dbus_client_set_proxy_handlers(GDBusClient *client,
+bool dbus_client_set_proxy_handlers(GDBusClient *client,
 					GDBusProxyFunction proxy_added,
 					GDBusProxyFunction proxy_removed,
 					GDBusPropertyFunction property_changed,
