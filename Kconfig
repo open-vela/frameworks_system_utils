@@ -8,10 +8,3 @@ config APP_FOCUS
     default n
     ---help---
         Enable the app focus module
-
-config DBUS_HELPER_LIBRARY
-    bool "D-Bus helper library"
-    default n
-    depends on LIB_DBUS && LIB_GLIB
-    ---help---
-        Enable the D-Bus helper library
