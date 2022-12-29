@@ -26,7 +26,7 @@ CSRCS  += app_focus.c
 
 endif # CONFIG_APP_FOCUS
 
-ifneq ($(CONFIG_DBUS_HELPER_LIBRARY),)
+ifneq ($(CONFIG_LIB_DBUS),)
 
 CSRCS  += $(wildcard gdbus/*.c)
 CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/dbus/dbus}
@@ -34,6 +34,6 @@ CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/glib/glib/gl
 CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/glib/glib/}
 CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/glib/}
 
-endif # CONFIG_DBUS_HELPER_LIBRARY
+endif # CONFIG_LIB_DBUS
 
 include $(APPDIR)/Application.mk
