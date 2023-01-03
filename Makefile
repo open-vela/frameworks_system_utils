@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2021 Xiaomi Corporation
+# Copyright (C) 2020 Xiaomi Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,22 +18,22 @@ include $(APPDIR)/Make.defs
 
 BIN := $(APPDIR)/staging/libframework.a
 
-CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/frameworks/utils/include}
+CSRCS     = client.c
+MAINSRC   = setprop.c getprop.c
+PROGNAME  = setprop getprop
 
-ifneq ($(CONFIG_APP_FOCUS),)
+ifeq ($(CONFIG_KVDB_SERVER),y)
+MAINSRC   += server.c
+PROGNAME  += kvdbd
+endif
 
-CSRCS  += app_focus.c
+CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/unqlite/unqlite}
 
-endif # CONFIG_APP_FOCUS
+PRIORITY  = $(CONFIG_KVDB_PRIORITY)
+STACKSIZE = $(CONFIG_KVDB_STACKSIZE)
+MODULE    = $(CONFIG_KVDB)
 
-ifneq ($(CONFIG_LIB_DBUS),)
-
-CSRCS  += $(wildcard gdbus/*.c)
-CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/dbus/dbus}
-CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/glib/glib/glib}
-CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/glib/glib/}
-CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/glib/}
-
-endif # CONFIG_LIB_DBUS
+CSRCS := $(wildcard $(CSRCS))
+MAINSRC := $(wildcard $(MAINSRC))
 
 include $(APPDIR)/Application.mk

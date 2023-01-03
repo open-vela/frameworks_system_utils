@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2021 Xiaomi Corporation
+# Copyright (C) 2020 Xiaomi Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,4 +14,8 @@
 # limitations under the License.
 #
 
-CONFIGURED_APPS += $(APPDIR)/frameworks/utils
+ifneq ($(CONFIG_KVDB),)
+CONFIGURED_APPS += $(APPDIR)/frameworks/kvdb
+CFLAGS   += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/frameworks/kvdb/include}
+CXXFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/frameworks/kvdb/include}
+endif
