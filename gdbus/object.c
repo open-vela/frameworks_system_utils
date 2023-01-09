@@ -11,10 +11,10 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <glib.h>
 #include <dbus/dbus.h>
 #include <dbus/dbus-list.h>
 #include <dbus/dbus-string.h>
+#include <uv.h>
 
 #include "gdbus.h"
 
@@ -40,10 +40,10 @@ struct generic_data {
 	DBusList *objects;
 	DBusList *added;
 	DBusList *removed;
-	guint process_id;
 	gboolean pending_prop;
 	char *introspect;
 	struct generic_data *parent;
+	uv_idle_t handle;
 };
 
 struct interface_data {
@@ -73,7 +73,7 @@ static int global_flags = 0;
 static struct generic_data *root;
 static DBusList *pending = NULL;
 
-static gboolean process_changes(gpointer user_data);
+static void process_changes(uv_idle_t *handle);
 static void process_properties_from_interface(struct generic_data *data,
 						struct interface_data *iface);
 static void process_property_changes(struct generic_data *data);
@@ -639,16 +639,10 @@ static gboolean dbus_args_have_signature(const GDBusArgInfo *args,
 
 static void add_pending(struct generic_data *data)
 {
-	guint old_id = data->process_id;
+	if (uv_is_active((const uv_handle_t *)&data->handle) != 0)
+		return;
 
-	data->process_id = g_idle_add(process_changes, data);
-
-	if (old_id > 0) {
-		/*
-		 * If the element already had an old idler, remove the old one,
-		 * no need to re-add it to the pending list.
-		 */
-		g_source_remove(old_id);
+	if (uv_idle_start(&data->handle, process_changes) == 0) {
 		return;
 	}
 
@@ -994,17 +988,14 @@ static void emit_interfaces_removed(struct generic_data *data)
 
 static void remove_pending(struct generic_data *data)
 {
-	if (data->process_id > 0) {
-		g_source_remove(data->process_id);
-		data->process_id = 0;
-	}
+	uv_idle_stop(&data->handle);
 
 	_dbus_list_remove(&pending, data);
 }
 
-static gboolean process_changes(gpointer user_data)
+static void process_changes(uv_idle_t *handle)
 {
-	struct generic_data *data = user_data;
+	struct generic_data *data = handle->data;
 
 	remove_pending(data);
 
@@ -1017,10 +1008,6 @@ static gboolean process_changes(gpointer user_data)
 
 	if (data->removed != NULL)
 		emit_interfaces_removed(data);
-
-	data->process_id = 0;
-
-	return FALSE;
 }
 
 static void generic_unregister(DBusConnection *connection, void *user_data)
@@ -1031,11 +1018,8 @@ static void generic_unregister(DBusConnection *connection, void *user_data)
 	if (parent != NULL)
 		_dbus_list_remove(&parent->objects, data);
 
-	if (data->process_id > 0) {
-		g_source_remove(data->process_id);
-		data->process_id = 0;
-		process_changes(data);
-	}
+	process_changes(&data->handle);
+	uv_close((uv_handle_t *)&data->handle, NULL);
 
 	_dbus_list_foreach(&data->objects, reset_parent, data->parent);
 	_dbus_list_clear(&data->objects);
@@ -1254,12 +1238,21 @@ static struct generic_data *object_path_ref(DBusConnection *connection,
 	data->conn = dbus_connection_ref(connection);
 	data->path = strdup0(path);
 	data->refcount = 1;
+	if (uv_idle_init(uv_default_loop(), &data->handle) != 0) {
+		dbus_connection_unref(data->conn);
+		free(data->path);
+		free(data);
+		return NULL;
+	}
+
+	data->handle.data = data;
 
 	data->introspect = strdup0(DBUS_INTROSPECT_1_0_XML_DOCTYPE_DECL_NODE "<node></node>");
 
 	if (!dbus_connection_register_object_path(connection, path,
 						&generic_table, data)) {
 		dbus_connection_unref(data->conn);
+		uv_close((uv_handle_t *)&data->handle, NULL);
 		free(data->path);
 		free(data->introspect);
 		free(data);
@@ -1511,7 +1504,7 @@ static void dbus_flush(DBusConnection *connection)
 		if (data->conn != connection)
 			continue;
 
-		process_changes(data);
+		process_changes(&data->handle);
 	}
 }
 
