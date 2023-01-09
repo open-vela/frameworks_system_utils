@@ -11,9 +11,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <glib.h>
 #include <dbus/dbus.h>
 #include <dbus/dbus-list.h>
+#include <uv.h>
 
 #include "gdbus.h"
 
@@ -32,8 +32,8 @@ struct service_data {
 	DBusPendingCall *call;
 	char *name;
 	const char *owner;
-	guint id;
 	struct filter_callback *callback;
+	uv_idle_t handle;
 };
 
 struct filter_callback {
@@ -350,6 +350,11 @@ static struct filter_callback *filter_data_add_callback(
 	return cb;
 }
 
+static void close_cb(uv_handle_t* handle)
+{
+	free(handle->data);
+}
+
 static void service_data_free(struct service_data *data)
 {
 	struct filter_callback *callback = data->callback;
@@ -359,13 +364,10 @@ static void service_data_free(struct service_data *data)
 	if (data->call)
 		dbus_pending_call_unref(data->call);
 
-	if (data->id)
-		g_source_remove(data->id);
-
 	free(data->name);
-	free(data);
-
 	callback->data = NULL;
+
+	uv_close((uv_handle_t *)&data->handle, close_cb);
 }
 
 /* Returns TRUE if data is freed */
@@ -596,9 +598,9 @@ static DBusHandlerResult message_filter(DBusConnection *connection,
 	return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
-static gboolean update_service(void *user_data)
+static void update_service(uv_idle_t *handle)
 {
-	struct service_data *data = user_data;
+	struct service_data *data = handle->data;
 	struct filter_callback *cb = data->callback;
 	DBusConnection *conn;
 
@@ -609,8 +611,6 @@ static gboolean update_service(void *user_data)
 		cb->conn_func(conn, cb->user_data);
 
 	dbus_connection_unref(conn);
-
-	return FALSE;
 }
 
 static void service_reply(DBusPendingCall *call, void *user_data)
@@ -633,7 +633,7 @@ static void service_reply(DBusPendingCall *call, void *user_data)
 						DBUS_TYPE_INVALID) == FALSE)
 		goto fail;
 
-	update_service(data);
+	update_service(&data->handle);
 
 	goto done;
 
@@ -663,9 +663,20 @@ static void check_service(DBusConnection *connection,
 	data->callback = callback;
 	callback->data = data;
 
+	if (uv_idle_init(uv_default_loop(), &data->handle) != 0) {
+		dbus_connection_unref(connection);
+		free(data);
+		return;
+	}
+
+	data->handle.data = data;
 	data->owner = check_name_cache(name);
 	if (data->owner != NULL) {
-		data->id = g_idle_add(update_service, data);
+		if (uv_idle_start(&data->handle, update_service) != 0) {
+			uv_close((uv_handle_t *)&data->handle, NULL);
+			dbus_connection_unref(connection);
+			free(data);
+		}
 		return;
 	}
 
@@ -673,6 +684,7 @@ static void check_service(DBusConnection *connection,
 			DBUS_PATH_DBUS, DBUS_INTERFACE_DBUS, "GetNameOwner");
 	if (message == NULL) {
 		error("Can't allocate new message");
+		dbus_connection_unref(connection);
 		free(data);
 		return;
 	}
@@ -683,12 +695,14 @@ static void check_service(DBusConnection *connection,
 	if (dbus_connection_send_with_reply(connection, message,
 							&data->call, -1) == FALSE) {
 		error("Failed to execute method call");
+		dbus_connection_unref(connection);
 		free(data);
 		goto done;
 	}
 
 	if (data->call == NULL) {
 		error("D-Bus connection not available");
+		dbus_connection_unref(connection);
 		free(data);
 		goto done;
 	}

@@ -8,8 +8,10 @@
  *
  */
 
-#include <glib.h>
 #include <dbus/dbus.h>
+#include <poll.h>
+#include <stdlib.h>
+#include <uv.h>
 
 #include "gdbus.h"
 
@@ -17,13 +19,18 @@
 #define error(fmt...)
 #define debug(fmt...)
 
+struct idle_handler {
+	uv_idle_t handle;
+	DBusConnection *conn;
+};
+
 struct timeout_handler {
-	guint id;
+	uv_timer_t handle;
 	DBusTimeout *timeout;
 };
 
 struct watch_info {
-	guint id;
+	uv_poll_t handle;
 	DBusWatch *watch;
 	DBusConnection *conn;
 };
@@ -47,36 +54,60 @@ static gboolean disconnected_signal(DBusConnection *conn,
 	return TRUE;
 }
 
-static gboolean message_dispatch(void *data)
+static void close_cb(uv_handle_t* handle)
 {
-	DBusConnection *conn = data;
+	free(handle->data);
+}
+
+static void message_dispatch(uv_idle_t *handle)
+{
+	struct idle_handler *handler = handle->data;
+	DBusConnection *conn = handler->conn;
 
 	/* Dispatch messages */
 	while (dbus_connection_dispatch(conn) == DBUS_DISPATCH_DATA_REMAINS);
 
 	dbus_connection_unref(conn);
 
-	return FALSE;
+	uv_close((uv_handle_t *)handle, close_cb);
 }
 
 static inline void queue_dispatch(DBusConnection *conn,
 						DBusDispatchStatus status)
 {
-	if (status == DBUS_DISPATCH_DATA_REMAINS)
-		g_idle_add(message_dispatch, dbus_connection_ref(conn));
+	if (status == DBUS_DISPATCH_DATA_REMAINS) {
+		struct idle_handler *handler;
+
+		handler = calloc(1, sizeof(struct idle_handler));
+		if (handler == NULL) {
+			return;
+		}
+
+		if (uv_idle_init(uv_default_loop(), &handler->handle) != 0) {
+			free(handler);
+			return;
+		}
+
+		handler->conn = dbus_connection_ref(conn);
+		handler->handle.data = handler;
+		if (uv_idle_start(&handler->handle, message_dispatch) != 0) {
+			dbus_connection_unref(conn);
+			free(handler);
+		}
+	}
 }
 
-static gboolean watch_func(GIOChannel *chan, GIOCondition cond, gpointer data)
+static void watch_func(uv_poll_t* handle, int state, int events)
 {
-	struct watch_info *info = data;
+	struct watch_info *info = handle->data;
 	unsigned int flags = 0;
 	DBusDispatchStatus status;
 	DBusConnection *conn;
 
-	if (cond & G_IO_IN)  flags |= DBUS_WATCH_READABLE;
-	if (cond & G_IO_OUT) flags |= DBUS_WATCH_WRITABLE;
-	if (cond & G_IO_HUP) flags |= DBUS_WATCH_HANGUP;
-	if (cond & G_IO_ERR) flags |= DBUS_WATCH_ERROR;
+	if (events & UV_READABLE)   flags |= DBUS_WATCH_READABLE;
+	if (events & UV_WRITABLE)   flags |= DBUS_WATCH_WRITABLE;
+	if (events & UV_DISCONNECT) flags |= DBUS_WATCH_HANGUP;
+	if (events & POLLERR)       flags |= DBUS_WATCH_ERROR;
 
 	/* Protect connection from being destroyed by dbus_watch_handle */
 	conn = dbus_connection_ref(info->conn);
@@ -87,29 +118,20 @@ static gboolean watch_func(GIOChannel *chan, GIOCondition cond, gpointer data)
 	queue_dispatch(conn, status);
 
 	dbus_connection_unref(conn);
-
-	return TRUE;
 }
 
 static void watch_info_free(void *data)
 {
 	struct watch_info *info = data;
 
-	if (info->id > 0) {
-		g_source_remove(info->id);
-		info->id = 0;
-	}
-
 	dbus_connection_unref(info->conn);
-
-	free(info);
+	uv_close((uv_handle_t *)&info->handle, close_cb);
 }
 
 static dbus_bool_t add_watch(DBusWatch *watch, void *data)
 {
 	DBusConnection *conn = data;
-	GIOCondition cond = G_IO_HUP | G_IO_ERR;
-	GIOChannel *chan;
+	int cond = UV_DISCONNECT;
 	struct watch_info *info;
 	unsigned int flags;
 	int fd;
@@ -118,9 +140,10 @@ static dbus_bool_t add_watch(DBusWatch *watch, void *data)
 		return TRUE;
 
 	info = calloc(1, sizeof(struct watch_info));
+	if (info == NULL)
+		return FALSE;
 
 	fd = dbus_watch_get_unix_fd(watch);
-	chan = g_io_channel_unix_new(fd);
 
 	info->watch = watch;
 	info->conn = dbus_connection_ref(conn);
@@ -129,14 +152,24 @@ static dbus_bool_t add_watch(DBusWatch *watch, void *data)
 
 	flags = dbus_watch_get_flags(watch);
 
-	if (flags & DBUS_WATCH_READABLE) cond |= G_IO_IN;
-	if (flags & DBUS_WATCH_WRITABLE) cond |= G_IO_OUT;
+	if (flags & DBUS_WATCH_READABLE) cond |= UV_READABLE;
+	if (flags & DBUS_WATCH_WRITABLE) cond |= UV_WRITABLE;
 
-	info->id = g_io_add_watch(chan, cond, watch_func, info);
+	if (uv_poll_init(uv_default_loop(), &info->handle, fd) != 0) {
+		free(info);
+		goto errout;
+	}
 
-	g_io_channel_unref(chan);
+	info->handle.data = info;
+	if (uv_poll_start(&info->handle, cond, watch_func) != 0) {
+		uv_close((uv_handle_t *)&info->handle, close_cb);
+		goto errout;
+	}
 
 	return TRUE;
+errout:
+	dbus_connection_unref(conn);
+	return FALSE;
 }
 
 static void remove_watch(DBusWatch *watch, void *data)
@@ -158,31 +191,20 @@ static void watch_toggled(DBusWatch *watch, void *data)
 		remove_watch(watch, data);
 }
 
-static gboolean timeout_handler_dispatch(gpointer data)
+static void timeout_handler_dispatch(uv_timer_t* handle)
 {
-	struct timeout_handler *handler = data;
-
-	handler->id = 0;
+	struct timeout_handler *handler = handle->data;
 
 	/* if not enabled should not be polled by the main loop */
-	if (!dbus_timeout_get_enabled(handler->timeout))
-		return FALSE;
-
-	dbus_timeout_handle(handler->timeout);
-
-	return FALSE;
+	if (dbus_timeout_get_enabled(handler->timeout))
+		dbus_timeout_handle(handler->timeout);
 }
 
 static void timeout_handler_free(void *data)
 {
 	struct timeout_handler *handler = data;
 
-	if (handler->id > 0) {
-		g_source_remove(handler->id);
-		handler->id = 0;
-	}
-
-	free(handler);
+	uv_close((uv_handle_t *)&handler->handle, close_cb);
 }
 
 static dbus_bool_t add_timeout(DBusTimeout *timeout, void *data)
@@ -194,15 +216,28 @@ static dbus_bool_t add_timeout(DBusTimeout *timeout, void *data)
 		return TRUE;
 
 	handler = calloc(1, sizeof(struct timeout_handler));
+	if (handler == NULL)
+		return FALSE;
 
 	handler->timeout = timeout;
 
 	dbus_timeout_set_data(timeout, handler, timeout_handler_free);
 
-	handler->id = g_timeout_add(interval, timeout_handler_dispatch,
-								handler);
+	if (uv_timer_init(uv_default_loop(), &handler->handle) != 0) {
+		goto errout;
+	}
+
+	handler->handle.data = handler;
+	if (uv_timer_start(&handler->handle, timeout_handler_dispatch, interval, 0) != 0) {
+		uv_close((uv_handle_t *)&handler->handle, close_cb);
+		goto errout;
+	}
 
 	return TRUE;
+errout:
+	free(handler);
+	dbus_timeout_set_data(timeout, NULL, NULL);
+	return FALSE;
 }
 
 static void remove_timeout(DBusTimeout *timeout, void *data)
