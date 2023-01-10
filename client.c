@@ -147,6 +147,8 @@ static int property_connect(void)
 
 static int property_set_(const char* key, const char* value, bool oneway)
 {
+    int fd;
+
     if (!key)
         return -EINVAL;
     if (!value)
@@ -160,7 +162,8 @@ static int property_set_(const char* key, const char* value, bool oneway)
     if (val_len > PROP_VALUE_MAX)
         return -E2BIG;
 
-    int fd = property_connect();
+again:
+    fd = property_connect();
     if (fd < 0)
         return fd;
 
@@ -186,6 +189,13 @@ static int property_set_(const char* key, const char* value, bool oneway)
 
     int ret = sendmsg(fd, &msg, 0);
     if (ret < 0) {
+        /* handle server refused by backlog limitation */
+
+        if (oneway && errno == ECONNRESET) {
+            close(fd);
+            goto again;
+        }
+
         ret = -errno;
         goto out;
     }
