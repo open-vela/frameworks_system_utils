@@ -16,8 +16,8 @@ extern "C" {
 #endif
 
 #include <dbus/dbus.h>
-#include <glib.h>
 
+typedef void*        gpointer;
 typedef int          gboolean;
 typedef unsigned int guint;
 typedef uint32_t     guint32;
@@ -396,9 +396,9 @@ const char *dbus_proxy_get_interface(GDBusProxy *proxy);
 gboolean dbus_proxy_get_property(GDBusProxy *proxy, const char *name,
 							DBusMessageIter *iter);
 
-GDBusProxy *dbus_proxy_lookup(GList *list, int *index, const char *path,
+GDBusProxy *dbus_proxy_lookup(void *list, int *index, const char *path,
 						const char *interface);
-char *dbus_proxy_path_lookup(GList *list, int *index, const char *path);
+char *dbus_proxy_path_lookup(void *list, int *index, const char *path);
 
 gboolean dbus_proxy_refresh_property(GDBusProxy *proxy, const char *name);
 

@@ -15,8 +15,11 @@
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <string.h>
-#include <glib.h>
+
 #include <dbus/dbus.h>
+#include <dbus/dbus-list.h>
+#include <dbus/dbus-string.h>
+#include <dbus/dbus-hash.h>
 
 #include "gdbus.h"
 
@@ -25,6 +28,12 @@
 #ifndef DBUS_INTERFACE_OBJECT_MANAGER
 #define DBUS_INTERFACE_OBJECT_MANAGER DBUS_INTERFACE_DBUS ".ObjectManager"
 #endif
+
+struct ptr_array {
+	void **data;
+	size_t len;
+	size_t alloc_len;
+};
 
 struct GDBusClient {
 	int ref_count;
@@ -35,7 +44,7 @@ struct GDBusClient {
 	guint watch;
 	guint added_watch;
 	guint removed_watch;
-	GPtrArray *match_rules;
+	struct ptr_array *match_rules;
 	DBusPendingCall *pending_call;
 	DBusPendingCall *get_objects_call;
 	GDBusWatchFunction connect_func;
@@ -51,7 +60,7 @@ struct GDBusClient {
 	void *ready_data;
 	GDBusPropertyFunction property_changed;
 	void *user_data;
-	GList *proxy_list;
+	DBusList *proxy_list;
 	gboolean standard;
 };
 
@@ -60,7 +69,7 @@ struct GDBusProxy {
 	GDBusClient *client;
 	char *obj_path;
 	char *interface;
-	GHashTable *prop_list;
+	DBusHashTable *prop_list;
 	guint watch;
 	guint watch_non_standard;
 	GDBusPropertyFunction prop_func;
@@ -76,6 +85,54 @@ struct prop_entry {
 	int type;
 	DBusMessage *msg;
 };
+
+static char *strdup0(const char *str)
+{
+	if (str)
+		return strdup(str);
+
+	return NULL;
+}
+
+static struct ptr_array *ptr_array_sized_new(size_t size)
+{
+	struct ptr_array *parray;
+
+	parray = malloc(sizeof(struct ptr_array) + size * sizeof(void *));
+	if (parray == NULL)
+		return NULL;
+
+	parray->data = (void **)(parray + 1);
+	parray->alloc_len = size;
+	parray->len = 0;
+	return parray;
+}
+
+static void ptr_array_add(struct ptr_array *array, void *data)
+{
+	struct ptr_array *tmp;
+
+	if (array->len >= array->alloc_len) {
+		tmp = realloc(array, sizeof(*tmp) + array->alloc_len * 2 * sizeof(void *));
+		if (tmp == NULL)
+			return;
+
+		array = tmp;
+		array->alloc_len *= 2;
+	}
+
+	array->data[array->len++] = data;
+}
+
+static void ptr_array_free(struct ptr_array *array)
+{
+	int i;
+	for (i = 0; i < array->len; i++) {
+		free(array->data[i]);
+	}
+
+	free(array);
+}
 
 static void modify_match_reply(DBusPendingCall *call, void *user_data)
 {
@@ -276,11 +333,11 @@ static struct prop_entry *prop_entry_new(const char *name,
 {
 	struct prop_entry *prop;
 
-	prop = g_try_new0(struct prop_entry, 1);
+	prop = calloc(1, sizeof(struct prop_entry));
 	if (prop == NULL)
 		return NULL;
 
-	prop->name = g_strdup(name);
+	prop->name = strdup0(name);
 	prop->type = dbus_message_iter_get_arg_type(iter);
 
 	prop_entry_update(prop, iter);
@@ -292,12 +349,15 @@ static void prop_entry_free(gpointer data)
 {
 	struct prop_entry *prop = data;
 
+	if (prop == NULL)
+		return;
+
 	if (prop->msg != NULL)
 		dbus_message_unref(prop->msg);
 
-	g_free(prop->name);
+	free(prop->name);
 
-	g_free(prop);
+	free(prop);
 }
 
 static void add_property(GDBusProxy *proxy, const char *name,
@@ -313,7 +373,7 @@ static void add_property(GDBusProxy *proxy, const char *name,
 	dbus_message_iter_recurse(iter, &value);
 
 	client->standard = standard;
-	prop = g_hash_table_lookup(proxy->prop_list, name);
+	prop = _dbus_hash_table_lookup_string(proxy->prop_list, name);
 	if (prop != NULL) {
 		prop_entry_update(prop, &value);
 		goto done;
@@ -323,7 +383,7 @@ static void add_property(GDBusProxy *proxy, const char *name,
 	if (prop == NULL)
 		return;
 
-	g_hash_table_replace(proxy->prop_list, prop->name, prop);
+	_dbus_hash_table_insert_string(proxy->prop_list, prop->name, prop);
 
 done:
 	if (proxy->prop_func)
@@ -437,15 +497,22 @@ static void get_all_properties(GDBusProxy *proxy)
 	dbus_message_unref(msg);
 }
 
-GDBusProxy *dbus_proxy_lookup(GList *list, int *index, const char *path,
+GDBusProxy *dbus_proxy_lookup(void *list, int *index, const char *path,
 						const char *interface)
 {
-	GList *l;
+	DBusList *list_ = list;
+	int n = index ? *index : 0;
+	DBusList *l;
 
 	if (!interface)
 		return NULL;
 
-	for (l = g_list_nth(list, index ? *index : 0); l; l = g_list_next(l)) {
+	for (l = _dbus_list_get_first_link(&list_); l;
+		l = _dbus_list_get_next_link(&list_, l)) {
+		if (n-- > 0) {
+			continue;
+		}
+
 		GDBusProxy *proxy = l->data;
 		const char *proxy_iface = dbus_proxy_get_interface(proxy);
 		const char *proxy_path = dbus_proxy_get_path(proxy);
@@ -453,20 +520,27 @@ GDBusProxy *dbus_proxy_lookup(GList *list, int *index, const char *path,
 		if (index)
 			(*index)++;
 
-		if (g_str_equal(proxy_iface, interface) == TRUE &&
-			g_str_equal(proxy_path, path) == TRUE)
+		if (strcmp(proxy_iface, interface) == 0 &&
+			strcmp(proxy_path, path) == 0)
 			return proxy;
         }
 
 	return NULL;
 }
 
-char *dbus_proxy_path_lookup(GList *list, int *index, const char *path)
+char *dbus_proxy_path_lookup(void *list, int *index, const char *path)
 {
+	DBusList *list_ = list;
 	int len = strlen(path);
-	GList *l;
+	int n = index ? *index : 0;
+	DBusList *l;
 
-	for (l = g_list_nth(list, index ? *index : 0); l; l = g_list_next(l)) {
+	for (l = _dbus_list_get_first_link(&list_); l;
+		l = _dbus_list_get_next_link(&list_, l)) {
+		if (n-- > 0) {
+			continue;
+		}
+
 		GDBusProxy *proxy = l->data;
 		const char *proxy_path = dbus_proxy_get_path(proxy);
 
@@ -474,7 +548,7 @@ char *dbus_proxy_path_lookup(GList *list, int *index, const char *path)
 			(*index)++;
 
 		if (!strncasecmp(proxy_path, path, len))
-			return strdup(proxy_path);
+			return strdup0(proxy_path);
 	}
 
 	return NULL;
@@ -511,7 +585,7 @@ static gboolean properties_changed(DBusConnection *conn, DBusMessage *msg,
 
 		dbus_message_iter_get_basic(&entry, &name);
 
-		g_hash_table_remove(proxy->prop_list, name);
+		_dbus_hash_table_remove_string(proxy->prop_list, name);
 
 		if (proxy->prop_func)
 			proxy->prop_func(proxy, name, NULL, proxy->prop_data);
@@ -549,15 +623,15 @@ static GDBusProxy *proxy_new(GDBusClient *client, const char *path,
 {
 	GDBusProxy *proxy;
 
-	proxy = g_try_new0(GDBusProxy, 1);
+	proxy = calloc(1, sizeof(GDBusProxy));
 	if (proxy == NULL)
 		return NULL;
 
 	proxy->client = client;
-	proxy->obj_path = g_strdup(path);
-	proxy->interface = g_strdup(interface);
+	proxy->obj_path = strdup0(path);
+	proxy->interface = strdup0(interface);
 
-	proxy->prop_list = g_hash_table_new_full(g_str_hash, g_str_equal,
+	proxy->prop_list = _dbus_hash_table_new(DBUS_HASH_STRING,
 							NULL, prop_entry_free);
 	proxy->watch = dbus_add_properties_watch(client->dbus_conn,
 							client->service_name,
@@ -576,7 +650,7 @@ static GDBusProxy *proxy_new(GDBusClient *client, const char *path,
 
 	proxy->pending = TRUE;
 
-	client->proxy_list = g_list_append(client->proxy_list, proxy);
+	_dbus_list_append(&client->proxy_list, proxy);
 
 	return dbus_proxy_ref(proxy);
 }
@@ -600,7 +674,7 @@ static void proxy_free(gpointer data)
 		dbus_remove_watch(client->dbus_conn, proxy->watch);
 		dbus_remove_watch(client->dbus_conn, proxy->watch_non_standard);
 
-		g_hash_table_remove_all(proxy->prop_list);
+		_dbus_hash_table_remove_all(proxy->prop_list);
 
 		proxy->client = NULL;
 	}
@@ -614,16 +688,15 @@ static void proxy_free(gpointer data)
 static void proxy_remove(GDBusClient *client, const char *path,
 						const char *interface)
 {
-	GList *list;
+	DBusList *list;
 
-	for (list = g_list_first(client->proxy_list); list;
-						list = g_list_next(list)) {
+	for (list = _dbus_list_get_first_link(&client->proxy_list); list;
+		list = _dbus_list_get_next_link(&client->proxy_list, list)) {
 		GDBusProxy *proxy = list->data;
 
-		if (g_str_equal(proxy->interface, interface) == TRUE &&
-				g_str_equal(proxy->obj_path, path) == TRUE) {
-			client->proxy_list =
-				g_list_delete_link(client->proxy_list, list);
+		if (strcmp(proxy->interface, interface) == 0 &&
+				strcmp(proxy->obj_path, path) == 0) {
+			_dbus_list_remove_link(&client->proxy_list, list);
 			proxy_free(proxy);
 			break;
 		}
@@ -703,12 +776,12 @@ void dbus_proxy_unref(GDBusProxy *proxy)
 		dbus_pending_call_unref(proxy->get_all_call);
 	}
 
-	g_hash_table_destroy(proxy->prop_list);
+	_dbus_hash_table_unref(proxy->prop_list);
 
-	g_free(proxy->obj_path);
-	g_free(proxy->interface);
+	free(proxy->obj_path);
+	free(proxy->interface);
 
-	g_free(proxy);
+	free(proxy);
 }
 
 const char *dbus_proxy_get_path(const GDBusProxy *proxy)
@@ -735,7 +808,7 @@ gboolean dbus_proxy_get_property(GDBusProxy *proxy, const char *name,
 	if (proxy == NULL || name == NULL)
 		return FALSE;
 
-	prop = g_hash_table_lookup(proxy->prop_list, name);
+	prop = _dbus_hash_table_lookup_string(proxy->prop_list, name);
 	if (prop == NULL)
 		return FALSE;
 
@@ -757,8 +830,8 @@ static void refresh_property_free(gpointer user_data)
 {
 	struct refresh_property_data *data = user_data;
 
-	g_free(data->name);
-	g_free(data);
+	free(data->name);
+	free(data);
 }
 
 static void refresh_property_reply(DBusPendingCall *call, void *user_data)
@@ -828,12 +901,12 @@ gboolean dbus_proxy_refresh_property(GDBusProxy *proxy, const char *name)
 				proxy, NULL);
 	}
 
-	data = g_try_new0(struct refresh_property_data, 1);
+	data = calloc(1, sizeof(struct refresh_property_data));
 	if (data == NULL)
 		return FALSE;
 
 	data->proxy = proxy;
-	data->name = g_strdup(name);
+	data->name = strdup0(name);
 
 	msg = dbus_message_new_method_call(client->service_name,
 			proxy->obj_path, DBUS_INTERFACE_PROPERTIES, "Get");
@@ -912,7 +985,7 @@ gboolean dbus_proxy_set_property_basic(GDBusProxy *proxy,
 	if (client == NULL)
 		return FALSE;
 
-	data = g_try_new0(struct set_property_data, 1);
+	data = calloc(1, sizeof(struct set_property_data));
 	if (data == NULL)
 		return FALSE;
 
@@ -929,7 +1002,7 @@ gboolean dbus_proxy_set_property_basic(GDBusProxy *proxy,
 	}
 
 	if (msg == NULL) {
-		g_free(data);
+		free(data);
 		return FALSE;
 	}
 
@@ -946,11 +1019,11 @@ gboolean dbus_proxy_set_property_basic(GDBusProxy *proxy,
 	if (dbus_send_message_with_reply(client->dbus_conn, msg,
 							&call, -1) == FALSE) {
 		dbus_message_unref(msg);
-		g_free(data);
+		free(data);
 		return FALSE;
 	}
 
-	dbus_pending_call_set_notify(call, set_property_reply, data, g_free);
+	dbus_pending_call_set_notify(call, set_property_reply, data, free);
 	dbus_pending_call_unref(call);
 
 	dbus_message_unref(msg);
@@ -979,7 +1052,7 @@ gboolean dbus_proxy_set_property_array(GDBusProxy *proxy,
 	if (!client || !client->standard)
 		return FALSE;
 
-	data = g_try_new0(struct set_property_data, 1);
+	data = calloc(1, sizeof(struct set_property_data));
 	if (!data)
 		return FALSE;
 
@@ -992,7 +1065,7 @@ gboolean dbus_proxy_set_property_array(GDBusProxy *proxy,
 						DBUS_INTERFACE_PROPERTIES,
 						"Set");
 	if (!msg) {
-		g_free(data);
+		free(data);
 		return FALSE;
 	}
 
@@ -1006,11 +1079,11 @@ gboolean dbus_proxy_set_property_array(GDBusProxy *proxy,
 	if (dbus_send_message_with_reply(client->dbus_conn, msg,
 							&call, -1) == FALSE) {
 		dbus_message_unref(msg);
-		g_free(data);
+		free(data);
 		return FALSE;
 	}
 
-	dbus_pending_call_set_notify(call, set_property_reply, data, g_free);
+	dbus_pending_call_set_notify(call, set_property_reply, data, free);
 	dbus_pending_call_unref(call);
 
 	dbus_message_unref(msg);
@@ -1070,7 +1143,7 @@ gboolean dbus_proxy_method_call(GDBusProxy *proxy, const char *method,
 	if (!function)
 		return dbus_send_message(client->dbus_conn, msg);
 
-	data = g_try_new0(struct method_call_data, 1);
+	data = calloc(1, sizeof(struct method_call_data));
 	if (data == NULL)
 		return FALSE;
 
@@ -1078,15 +1151,14 @@ gboolean dbus_proxy_method_call(GDBusProxy *proxy, const char *method,
 	data->user_data = user_data;
 	data->destroy = destroy;
 
-
 	if (dbus_send_message_with_reply(client->dbus_conn, msg,
 					&call, METHOD_CALL_TIMEOUT) == FALSE) {
 		dbus_message_unref(msg);
-		g_free(data);
+		free(data);
 		return FALSE;
 	}
 
-	dbus_pending_call_set_notify(call, method_call_reply, data, g_free);
+	dbus_pending_call_set_notify(call, method_call_reply, data, free);
 	dbus_pending_call_unref(call);
 
 	dbus_message_unref(msg);
@@ -1118,12 +1190,13 @@ gboolean dbus_proxy_set_removed_watch(GDBusProxy *proxy,
 	return TRUE;
 }
 
-static void refresh_properties(GList *list)
+static void refresh_properties(DBusList *list)
 {
-	GList *l;
+	DBusList *l;
 
-	for (l = g_list_first(list); l; l = g_list_next(l)) {
-		GDBusProxy *proxy = list->data;
+	for (l = _dbus_list_get_first_link(&list); l;
+		l = _dbus_list_get_next_link(&list, l)) {
+		GDBusProxy *proxy = l->data;
 
 		if (proxy->pending)
 			get_all_properties(proxy);
@@ -1135,10 +1208,10 @@ static void parse_properties(GDBusClient *client, const char *path,
 {
 	GDBusProxy *proxy;
 
-	if (g_str_equal(interface, DBUS_INTERFACE_INTROSPECTABLE) == TRUE)
+	if (strcmp(interface, DBUS_INTERFACE_INTROSPECTABLE) == 0)
 		return;
 
-	if (g_str_equal(interface, DBUS_INTERFACE_PROPERTIES) == TRUE)
+	if (strcmp(interface, DBUS_INTERFACE_PROPERTIES) == 0)
 		return;
 
 	proxy = dbus_proxy_lookup(client->proxy_list, NULL,
@@ -1219,10 +1292,10 @@ static void get_properties_reply_not_standard(DBusMessage *message,
 
 static gboolean get_properties_non_standard(GDBusClient *client)
 {
-	GList *list;
+	DBusList *list;
 
-	for (list = g_list_first(client->proxy_list); list;
-				list = g_list_next(list)) {
+	for (list = _dbus_list_get_first_link(&client->proxy_list); list;
+		list = _dbus_list_get_next_link(&client->proxy_list, list)) {
 		GDBusProxy *proxy;
 
 		proxy = list->data;
@@ -1420,7 +1493,7 @@ static void service_disconnect(DBusConnection *conn, void *user_data)
 
 	client->connected = FALSE;
 
-	g_list_free_full(client->proxy_list, proxy_free);
+	_dbus_list_clear_full(&client->proxy_list, proxy_free);
 	client->proxy_list = NULL;
 
 	if (client->disconn_func)
@@ -1443,10 +1516,11 @@ static DBusHandlerResult message_filter(DBusConnection *connection,
 	path = dbus_message_get_path(message);
 	interface = dbus_message_get_interface(message);
 
-	if (g_str_has_prefix(path, client->base_path) == FALSE)
+	if (path == NULL || client->base_path == NULL ||
+	    strncmp(path, client->base_path, strlen(client->base_path)) != 0)
 		return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
-	if (g_str_equal(interface, DBUS_INTERFACE_PROPERTIES) == TRUE)
+	if (strcmp(interface, DBUS_INTERFACE_PROPERTIES) == 0)
 		return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
 	if (client->signal_func)
@@ -1467,29 +1541,30 @@ GDBusClient *dbus_client_new_full(DBusConnection *connection,
 							const char *root_path)
 {
 	GDBusClient *client;
+	DBusString str;
+	char *rule;
 	unsigned int i;
 
 	if (!connection || !service)
 		return NULL;
 
-	client = g_try_new0(GDBusClient, 1);
+	client = calloc(1, sizeof(GDBusClient));
 	if (client == NULL)
 		return NULL;
 
 	if (dbus_connection_add_filter(connection, message_filter,
 						client, NULL) == FALSE) {
-		g_free(client);
+		free(client);
 		return NULL;
 	}
 
 	client->dbus_conn = dbus_connection_ref(connection);
-	client->service_name = g_strdup(service);
-	client->base_path = g_strdup(path);
-	client->root_path = g_strdup(root_path);
+	client->service_name = strdup0(service);
+	client->base_path = strdup0(path);
+	client->root_path = strdup0(root_path);
 	client->connected = FALSE;
 
-	client->match_rules = g_ptr_array_sized_new(1);
-	g_ptr_array_set_free_func(client->match_rules, g_free);
+	client->match_rules = ptr_array_sized_new(1);
 
 	client->watch = dbus_add_service_watch(connection, service,
 						service_connect,
@@ -1511,13 +1586,17 @@ GDBusClient *dbus_client_new_full(DBusConnection *connection,
 						"InterfacesRemoved",
 						interfaces_removed,
 						client, NULL);
-	g_ptr_array_add(client->match_rules, g_strdup_printf("type='signal',"
-				"sender='%s',path_namespace='%s'",
-				client->service_name, client->base_path));
+	_dbus_string_init(&str);
+	_dbus_string_append_printf(&str, "type='signal', sender='%s',"
+					"path_namespace='%s'",
+				client->service_name, client->base_path);
+	_dbus_string_copy_data(&str, &rule);
+	_dbus_string_free(&str);
+	ptr_array_add(client->match_rules, rule);
 
 	for (i = 0; i < client->match_rules->len; i++) {
 		modify_match(client->dbus_conn, "AddMatch",
-				g_ptr_array_index(client->match_rules, i));
+				client->match_rules->data[i]);
 	}
 
 	return dbus_client_ref(client);
@@ -1555,15 +1634,15 @@ void dbus_client_unref(GDBusClient *client)
 
 	for (i = 0; i < client->match_rules->len; i++) {
 		modify_match(client->dbus_conn, "RemoveMatch",
-				g_ptr_array_index(client->match_rules, i));
+				client->match_rules->data[i]);
 	}
 
-	g_ptr_array_free(client->match_rules, TRUE);
+	ptr_array_free(client->match_rules);
 
 	dbus_connection_remove_filter(client->dbus_conn,
 						message_filter, client);
 
-	g_list_free_full(client->proxy_list, proxy_free);
+	_dbus_list_clear_full(&client->proxy_list, proxy_free);
 
 	/*
 	 * Don't call disconn_func twice if disconnection
@@ -1578,11 +1657,11 @@ void dbus_client_unref(GDBusClient *client)
 
 	dbus_connection_unref(client->dbus_conn);
 
-	g_free(client->service_name);
-	g_free(client->base_path);
-	g_free(client->root_path);
+	free(client->service_name);
+	free(client->base_path);
+	free(client->root_path);
 
-	g_free(client);
+	free(client);
 }
 
 gboolean dbus_client_set_connect_watch(GDBusClient *client,

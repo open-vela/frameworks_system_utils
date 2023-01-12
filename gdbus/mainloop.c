@@ -8,10 +8,6 @@
  *
  */
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <glib.h>
 #include <dbus/dbus.h>
 
@@ -106,7 +102,7 @@ static void watch_info_free(void *data)
 
 	dbus_connection_unref(info->conn);
 
-	g_free(info);
+	free(info);
 }
 
 static dbus_bool_t add_watch(DBusWatch *watch, void *data)
@@ -121,7 +117,7 @@ static dbus_bool_t add_watch(DBusWatch *watch, void *data)
 	if (!dbus_watch_get_enabled(watch))
 		return TRUE;
 
-	info = g_new0(struct watch_info, 1);
+	info = calloc(1, sizeof(struct watch_info));
 
 	fd = dbus_watch_get_unix_fd(watch);
 	chan = g_io_channel_unix_new(fd);
@@ -186,7 +182,7 @@ static void timeout_handler_free(void *data)
 		handler->id = 0;
 	}
 
-	g_free(handler);
+	free(handler);
 }
 
 static dbus_bool_t add_timeout(DBusTimeout *timeout, void *data)
@@ -197,7 +193,7 @@ static dbus_bool_t add_timeout(DBusTimeout *timeout, void *data)
 	if (!dbus_timeout_get_enabled(timeout))
 		return TRUE;
 
-	handler = g_new0(struct timeout_handler, 1);
+	handler = calloc(1, sizeof(struct timeout_handler));
 
 	handler->timeout = timeout;
 
@@ -346,7 +342,7 @@ gboolean dbus_set_disconnect_function(DBusConnection *connection,
 {
 	struct disconnect_data *dc_data;
 
-	dc_data = g_new0(struct disconnect_data, 1);
+	dc_data = calloc(1, sizeof(struct disconnect_data));
 
 	dc_data->function = function;
 	dc_data->user_data = user_data;
@@ -355,9 +351,9 @@ gboolean dbus_set_disconnect_function(DBusConnection *connection,
 
 	if (dbus_add_signal_watch(connection, NULL, NULL,
 				DBUS_INTERFACE_LOCAL, "Disconnected",
-				disconnected_signal, dc_data, g_free) == 0) {
+				disconnected_signal, dc_data, free) == 0) {
 		error("Failed to add watch for D-Bus Disconnected signal");
-		g_free(dc_data);
+		free(dc_data);
 		return FALSE;
 	}
 

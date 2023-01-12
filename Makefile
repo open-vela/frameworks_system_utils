@@ -23,10 +23,10 @@ CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/frameworks/utils/incl
 ifneq ($(CONFIG_LIB_DBUS),)
 
 CSRCS  += $(wildcard gdbus/*.c)
+CFLAGS += -DDBUS_COMPILATION -DVERSION="1.15.1"
 CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/dbus/dbus}
 CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/glib/glib/glib}
 CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/glib/glib/}
-CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/glib/}
 
 endif # CONFIG_LIB_DBUS
 

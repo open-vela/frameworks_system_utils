@@ -8,15 +8,10 @@
  *
  */
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
 #include <errno.h>
 
 #include <dbus/dbus.h>
-
-#include <glib.h>
+#include "gdbus.h"
 
 int polkit_check_authorization(DBusConnection *conn,
 				const char *action, gboolean interaction,
