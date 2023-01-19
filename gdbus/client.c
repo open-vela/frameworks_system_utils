@@ -52,6 +52,7 @@ struct GDBusClient {
 	GDBusPropertyFunction property_changed;
 	void *user_data;
 	GList *proxy_list;
+	gboolean standard;
 };
 
 struct GDBusProxy {
@@ -61,6 +62,7 @@ struct GDBusProxy {
 	char *interface;
 	GHashTable *prop_list;
 	guint watch;
+	guint watch_non_standard;
 	GDBusPropertyFunction prop_func;
 	void *prop_data;
 	GDBusProxyFunction removed_func;
@@ -299,7 +301,7 @@ static void prop_entry_free(gpointer data)
 }
 
 static void add_property(GDBusProxy *proxy, const char *name,
-				DBusMessageIter *iter, gboolean send_changed)
+				DBusMessageIter *iter, gboolean send_changed, gboolean standard)
 {
 	GDBusClient *client = proxy->client;
 	DBusMessageIter value;
@@ -310,6 +312,7 @@ static void add_property(GDBusProxy *proxy, const char *name,
 
 	dbus_message_iter_recurse(iter, &value);
 
+	client->standard = standard;
 	prop = g_hash_table_lookup(proxy->prop_list, name);
 	if (prop != NULL) {
 		prop_entry_update(prop, &value);
@@ -335,7 +338,7 @@ done:
 }
 
 static void update_properties(GDBusProxy *proxy, DBusMessageIter *iter,
-							gboolean send_changed)
+				gboolean send_changed, gboolean standard)
 {
 	DBusMessageIter dict;
 
@@ -356,7 +359,7 @@ static void update_properties(GDBusProxy *proxy, DBusMessageIter *iter,
 		dbus_message_iter_get_basic(&entry, &name);
 		dbus_message_iter_next(&entry);
 
-		add_property(proxy, name, &entry, send_changed);
+		add_property(proxy, name, &entry, send_changed, standard);
 
 		dbus_message_iter_next(&dict);
 	}
@@ -392,7 +395,7 @@ static void get_all_properties_reply(DBusPendingCall *call, void *user_data)
 
 	dbus_message_iter_init(reply, &iter);
 
-	update_properties(proxy, &iter, FALSE);
+	update_properties(proxy, &iter, FALSE, TRUE);
 
 done:
 	proxy_added(client, proxy);
@@ -494,7 +497,7 @@ static gboolean properties_changed(DBusConnection *conn, DBusMessage *msg,
 	dbus_message_iter_get_basic(&iter, &interface);
 	dbus_message_iter_next(&iter);
 
-	update_properties(proxy, &iter, TRUE);
+	update_properties(proxy, &iter, TRUE, TRUE);
 
 	dbus_message_iter_next(&iter);
 
@@ -523,6 +526,24 @@ static gboolean properties_changed(DBusConnection *conn, DBusMessage *msg,
 	return TRUE;
 }
 
+static gboolean properties_changed_non_standard(DBusConnection *conn, DBusMessage *msg,
+						void *user_data)
+{
+	GDBusProxy *proxy = user_data;
+	DBusMessageIter iter;
+	const char *name;
+
+	if (dbus_message_iter_init(msg, &iter) == FALSE)
+		return TRUE;
+
+	dbus_message_iter_get_basic(&iter, &name);
+
+	dbus_message_iter_next(&iter);
+	add_property(proxy, name, &iter, TRUE, FALSE);
+
+	return TRUE;
+}
+
 static GDBusProxy *proxy_new(GDBusClient *client, const char *path,
 						const char *interface)
 {
@@ -544,6 +565,15 @@ static GDBusProxy *proxy_new(GDBusClient *client, const char *path,
 							proxy->interface,
 							properties_changed,
 							proxy, NULL);
+
+	proxy->watch_non_standard = dbus_add_signal_watch(client->dbus_conn,
+							client->service_name,
+							proxy->obj_path,
+							proxy->interface,
+							"PropertyChanged",
+							properties_changed_non_standard,
+							proxy, NULL);
+
 	proxy->pending = TRUE;
 
 	client->proxy_list = g_list_append(client->proxy_list, proxy);
@@ -568,6 +598,7 @@ static void proxy_free(gpointer data)
 			client->proxy_removed(proxy, client->user_data);
 
 		dbus_remove_watch(client->dbus_conn, proxy->watch);
+		dbus_remove_watch(client->dbus_conn, proxy->watch_non_standard);
 
 		g_hash_table_remove_all(proxy->prop_list);
 
@@ -743,11 +774,37 @@ static void refresh_property_reply(DBusPendingCall *call, void *user_data)
 
 		dbus_message_iter_init(reply, &iter);
 
-		add_property(data->proxy, data->name, &iter, TRUE);
+		add_property(data->proxy, data->name, &iter, TRUE, TRUE);
 	} else
 		dbus_error_free(&error);
 
 	dbus_message_unref(reply);
+}
+
+static void refresh_properties_reply_not_standard(DBusMessage *message,
+					void *user_data)
+{
+	GDBusProxy *proxy = user_data;
+	DBusMessageIter array;
+	DBusError error;
+
+	dbus_proxy_ref(proxy);
+	dbus_error_init(&error);
+
+	if (dbus_set_error_from_message(&error, message)) {
+		dbus_error_free(&error);
+		dbus_proxy_unref(proxy);
+		return;
+	}
+
+	if (!dbus_message_iter_init(message, &array)) {
+		dbus_proxy_unref(proxy);
+		return;
+	}
+
+	update_properties(proxy, &array, TRUE, FALSE);
+
+	dbus_proxy_unref(proxy);
 }
 
 gboolean dbus_proxy_refresh_property(GDBusProxy *proxy, const char *name)
@@ -765,6 +822,12 @@ gboolean dbus_proxy_refresh_property(GDBusProxy *proxy, const char *name)
 	if (client == NULL)
 		return FALSE;
 
+	if (!client->standard) {
+		return dbus_proxy_method_call(proxy, "GetProperties",
+				NULL, refresh_properties_reply_not_standard,
+				proxy, NULL);
+	}
+
 	data = g_try_new0(struct refresh_property_data, 1);
 	if (data == NULL)
 		return FALSE;
@@ -774,6 +837,7 @@ gboolean dbus_proxy_refresh_property(GDBusProxy *proxy, const char *name)
 
 	msg = dbus_message_new_method_call(client->service_name,
 			proxy->obj_path, DBUS_INTERFACE_PROPERTIES, "Get");
+
 	if (msg == NULL) {
 		refresh_property_free(data);
 		return FALSE;
@@ -856,16 +920,25 @@ gboolean dbus_proxy_set_property_basic(GDBusProxy *proxy,
 	data->user_data = user_data;
 	data->destroy = destroy;
 
-	msg = dbus_message_new_method_call(client->service_name,
-			proxy->obj_path, DBUS_INTERFACE_PROPERTIES, "Set");
+	if (client->standard) {
+		msg = dbus_message_new_method_call(client->service_name,
+				proxy->obj_path, DBUS_INTERFACE_PROPERTIES, "Set");
+	} else {
+		msg = dbus_message_new_method_call(client->service_name,
+				proxy->obj_path, proxy->interface, "SetProperty");
+	}
+
 	if (msg == NULL) {
 		g_free(data);
 		return FALSE;
 	}
 
 	dbus_message_iter_init_append(msg, &iter);
-	dbus_message_iter_append_basic(&iter, DBUS_TYPE_STRING,
-							&proxy->interface);
+
+	if (client->standard)
+		dbus_message_iter_append_basic(&iter, DBUS_TYPE_STRING,
+						&proxy->interface);
+
 	dbus_message_iter_append_basic(&iter, DBUS_TYPE_STRING, &name);
 
 	append_variant(&iter, type, value);
@@ -903,7 +976,7 @@ gboolean dbus_proxy_set_property_array(GDBusProxy *proxy,
 		return FALSE;
 
 	client = proxy->client;
-	if (!client)
+	if (!client || !client->standard)
 		return FALSE;
 
 	data = g_try_new0(struct set_property_data, 1);
@@ -1071,7 +1144,7 @@ static void parse_properties(GDBusClient *client, const char *path,
 	proxy = dbus_proxy_lookup(client->proxy_list, NULL,
 						path, interface);
 	if (proxy && !proxy->pending) {
-		update_properties(proxy, iter, FALSE);
+		update_properties(proxy, iter, FALSE, TRUE);
 		return;
 	}
 
@@ -1081,7 +1154,7 @@ static void parse_properties(GDBusClient *client, const char *path,
 			return;
 	}
 
-	update_properties(proxy, iter, FALSE);
+	update_properties(proxy, iter, FALSE, TRUE);
 
 	proxy_added(client, proxy);
 }
@@ -1114,6 +1187,53 @@ static void parse_interfaces(GDBusClient *client, const char *path,
 	}
 }
 
+static void get_properties_reply_not_standard(DBusMessage *message,
+					void *user_data)
+{
+	GDBusProxy *proxy = user_data;
+	GDBusClient *client = proxy->client;
+	DBusMessageIter array;
+	DBusError error;
+
+	dbus_proxy_ref(proxy);
+	dbus_error_init(&error);
+
+	if (dbus_set_error_from_message(&error, message)) {
+		dbus_error_free(&error);
+		dbus_proxy_unref(proxy);
+		return;
+	}
+
+	if (!dbus_message_iter_init(message, &array)) {
+		dbus_proxy_unref(proxy);
+		return;
+	}
+
+	update_properties(proxy, &array, FALSE, FALSE);
+
+	if (client->ready && !client->standard)
+		client->ready(client, client->ready_data);
+
+	dbus_proxy_unref(proxy);
+}
+
+static gboolean get_properties_non_standard(GDBusClient *client)
+{
+	GList *list;
+
+	for (list = g_list_first(client->proxy_list); list;
+				list = g_list_next(list)) {
+		GDBusProxy *proxy;
+
+		proxy = list->data;
+		dbus_proxy_method_call(proxy, "GetProperties",
+				NULL, get_properties_reply_not_standard,
+				proxy, NULL);
+	}
+
+	return TRUE;
+}
+
 static gboolean interfaces_added(DBusConnection *conn, DBusMessage *msg,
 							void *user_data)
 {
@@ -1133,6 +1253,7 @@ static gboolean interfaces_added(DBusConnection *conn, DBusMessage *msg,
 	dbus_client_ref(client);
 
 	parse_interfaces(client, path, &iter);
+	get_properties_non_standard(client);
 
 	dbus_client_unref(client);
 
@@ -1204,6 +1325,8 @@ static void parse_managed_objects(GDBusClient *client, DBusMessage *msg)
 
 		dbus_message_iter_next(&dict);
 	}
+
+	get_properties_non_standard(client);
 }
 
 static void get_managed_objects_reply(DBusPendingCall *call, void *user_data)
@@ -1224,7 +1347,7 @@ static void get_managed_objects_reply(DBusPendingCall *call, void *user_data)
 	parse_managed_objects(client, reply);
 
 done:
-	if (client->ready)
+	if (client->ready && client->standard)
 		client->ready(client, client->ready_data);
 
 	dbus_message_unref(reply);
