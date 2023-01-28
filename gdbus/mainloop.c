@@ -35,12 +35,12 @@
 #define debug(fmt...)
 
 struct timeout_handler {
-	unsigned int id;
+	guint id;
 	DBusTimeout *timeout;
 };
 
 struct watch_info {
-	unsigned int id;
+	guint id;
 	DBusWatch *watch;
 	DBusConnection *conn;
 };
@@ -50,7 +50,7 @@ struct disconnect_data {
 	void *user_data;
 };
 
-static bool disconnected_signal(DBusConnection *conn,
+static gboolean disconnected_signal(DBusConnection *conn,
 						DBusMessage *msg, void *data)
 {
 	struct disconnect_data *dc_data = data;
@@ -257,10 +257,10 @@ static inline void setup_dbus_with_main_loop(DBusConnection *conn)
 								NULL, NULL);
 }
 
-static bool setup_bus(DBusConnection *conn, const char *name,
+static gboolean setup_bus(DBusConnection *conn, const char *name,
 						DBusError *error)
 {
-	bool result;
+	gboolean result;
 	DBusDispatchStatus status;
 
 	if (name != NULL) {
@@ -330,7 +330,7 @@ DBusConnection *dbus_setup_private(DBusBusType type, const char *name,
 	return conn;
 }
 
-bool dbus_request_name(DBusConnection *connection, const char *name,
+gboolean dbus_request_name(DBusConnection *connection, const char *name,
 							DBusError *error)
 {
 	int result;
@@ -353,7 +353,7 @@ bool dbus_request_name(DBusConnection *connection, const char *name,
 	return TRUE;
 }
 
-bool dbus_set_disconnect_function(DBusConnection *connection,
+gboolean dbus_set_disconnect_function(DBusConnection *connection,
 				GDBusWatchFunction function,
 				void *user_data, DBusFreeFunction destroy)
 {
