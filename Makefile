@@ -20,12 +20,6 @@ BIN := $(APPDIR)/staging/libframework.a
 
 CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/frameworks/utils/include}
 
-ifneq ($(CONFIG_APP_FOCUS),)
-
-CSRCS  += app_focus.c
-
-endif # CONFIG_APP_FOCUS
-
 ifneq ($(CONFIG_LIB_DBUS),)
 
 CSRCS  += $(wildcard gdbus/*.c)
