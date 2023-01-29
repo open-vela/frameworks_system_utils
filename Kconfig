@@ -3,8 +3,3 @@
 # see the file kconfig-language.txt in the NuttX tools repository.
 #
 
-config APP_FOCUS
-    bool
-    default n
-    ---help---
-        Enable the app focus module
