@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2017 The Android Open Source Project
+ * Copyright (C) 2020 Xiaomi Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,20 +14,26 @@
  * limitations under the License.
  */
 
-#pragma once
+#include <stdio.h>
+#include <string.h>
 
-#include <android/log.h>
+#include <kvdb.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+int main(int argc, char* argv[])
+{
+    int ret = 0;
 
-/*
- * log_id_t helpers
- */
-log_id_t android_name_to_log_id(const char* logName);
-const char* android_log_id_to_name(log_id_t log_id);
+    if (argc == 3)
+        ret = -property_set(argv[1], argv[2]);
+    else if (argc == 2 && strncmp(argv[1], "-h", 3))
+        ret = -property_delete(argv[1]);
+    else
+        printf("Usage: %s <key> [value]\n", argv[0]);
 
-#ifdef __cplusplus
+    if (ret > 0)
+       printf("Error: %s\n", strerror(ret));
+    else
+        property_commit();
+
+    return ret;
 }
-#endif
