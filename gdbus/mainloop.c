@@ -251,7 +251,7 @@ static gboolean setup_bus(DBusConnection *conn, const char *name,
 	DBusDispatchStatus status;
 
 	if (name != NULL) {
-		result = g_dbus_request_name(conn, name, error);
+		result = dbus_request_name(conn, name, error);
 
 		if (error != NULL) {
 			if (dbus_error_is_set(error) == TRUE)
@@ -270,7 +270,7 @@ static gboolean setup_bus(DBusConnection *conn, const char *name,
 	return TRUE;
 }
 
-DBusConnection *g_dbus_setup_bus(DBusBusType type, const char *name,
+DBusConnection *dbus_setup_bus(DBusBusType type, const char *name,
 							DBusError *error)
 {
 	DBusConnection *conn;
@@ -293,7 +293,7 @@ DBusConnection *g_dbus_setup_bus(DBusBusType type, const char *name,
 	return conn;
 }
 
-DBusConnection *g_dbus_setup_private(DBusBusType type, const char *name,
+DBusConnection *dbus_setup_private(DBusBusType type, const char *name,
 							DBusError *error)
 {
 	DBusConnection *conn;
@@ -317,7 +317,7 @@ DBusConnection *g_dbus_setup_private(DBusBusType type, const char *name,
 	return conn;
 }
 
-gboolean g_dbus_request_name(DBusConnection *connection, const char *name,
+gboolean dbus_request_name(DBusConnection *connection, const char *name,
 							DBusError *error)
 {
 	int result;
@@ -340,7 +340,7 @@ gboolean g_dbus_request_name(DBusConnection *connection, const char *name,
 	return TRUE;
 }
 
-gboolean g_dbus_set_disconnect_function(DBusConnection *connection,
+gboolean dbus_set_disconnect_function(DBusConnection *connection,
 				GDBusWatchFunction function,
 				void *user_data, DBusFreeFunction destroy)
 {
@@ -353,7 +353,7 @@ gboolean g_dbus_set_disconnect_function(DBusConnection *connection,
 
 	dbus_connection_set_exit_on_disconnect(connection, FALSE);
 
-	if (g_dbus_add_signal_watch(connection, NULL, NULL,
+	if (dbus_add_signal_watch(connection, NULL, NULL,
 				DBUS_INTERFACE_LOCAL, "Disconnected",
 				disconnected_signal, dc_data, g_free) == 0) {
 		error("Failed to add watch for D-Bus Disconnected signal");
