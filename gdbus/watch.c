@@ -204,7 +204,7 @@ static void filter_data_free(struct filter_data *data)
 		g_free(l->data);
 
 	g_slist_free(data->callbacks);
-	g_dbus_remove_watch(data->connection, data->name_watch);
+	dbus_remove_watch(data->connection, data->name_watch);
 	g_free(data->name);
 	g_free(data->owner);
 	g_free(data->path);
@@ -680,7 +680,7 @@ done:
 	dbus_message_unref(message);
 }
 
-guint g_dbus_add_service_watch(DBusConnection *connection, const char *name,
+guint dbus_add_service_watch(DBusConnection *connection, const char *name,
 				GDBusWatchFunction connect,
 				GDBusWatchFunction disconnect,
 				void *user_data, GDBusDestroyFunction destroy)
@@ -709,15 +709,15 @@ guint g_dbus_add_service_watch(DBusConnection *connection, const char *name,
 	return cb->id;
 }
 
-guint g_dbus_add_disconnect_watch(DBusConnection *connection, const char *name,
+guint dbus_add_disconnect_watch(DBusConnection *connection, const char *name,
 				GDBusWatchFunction func,
 				void *user_data, GDBusDestroyFunction destroy)
 {
-	return g_dbus_add_service_watch(connection, name, NULL, func,
+	return dbus_add_service_watch(connection, name, NULL, func,
 							user_data, destroy);
 }
 
-guint g_dbus_add_signal_watch(DBusConnection *connection,
+guint dbus_add_signal_watch(DBusConnection *connection,
 				const char *sender, const char *path,
 				const char *interface, const char *member,
 				GDBusSignalFunction function, void *user_data,
@@ -737,14 +737,14 @@ guint g_dbus_add_signal_watch(DBusConnection *connection,
 		return 0;
 
 	if (data->name != NULL && data->name_watch == 0)
-		data->name_watch = g_dbus_add_service_watch(connection,
+		data->name_watch = dbus_add_service_watch(connection,
 							data->name, NULL,
 							NULL, NULL, NULL);
 
 	return cb->id;
 }
 
-guint g_dbus_add_properties_watch(DBusConnection *connection,
+guint dbus_add_properties_watch(DBusConnection *connection,
 				const char *sender, const char *path,
 				const char *interface,
 				GDBusSignalFunction function, void *user_data,
@@ -765,14 +765,14 @@ guint g_dbus_add_properties_watch(DBusConnection *connection,
 		return 0;
 
 	if (data->name != NULL && data->name_watch == 0)
-		data->name_watch = g_dbus_add_service_watch(connection,
+		data->name_watch = dbus_add_service_watch(connection,
 							data->name, NULL,
 							NULL, NULL, NULL);
 
 	return cb->id;
 }
 
-gboolean g_dbus_remove_watch(DBusConnection *connection, guint id)
+gboolean dbus_remove_watch(DBusConnection *connection, guint id)
 {
 	struct filter_data *data;
 	struct filter_callback *cb;
@@ -794,7 +794,7 @@ gboolean g_dbus_remove_watch(DBusConnection *connection, guint id)
 	return FALSE;
 }
 
-void g_dbus_remove_all_watches(DBusConnection *connection)
+void dbus_remove_all_watches(DBusConnection *connection)
 {
 	struct filter_data *data;
 
