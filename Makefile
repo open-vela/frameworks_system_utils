@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2020 Xiaomi Corporation
+# Copyright (C) 2021 Xiaomi Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,22 +18,16 @@ include $(APPDIR)/Make.defs
 
 BIN := $(APPDIR)/staging/libframework.a
 
-CSRCS     = client.c
-MAINSRC   = setprop.c getprop.c
-PROGNAME  = setprop getprop
+CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/frameworks/utils/include}
 
-ifeq ($(CONFIG_KVDB_SERVER),y)
-MAINSRC   += server.c
-PROGNAME  += kvdbd
-endif
+ifneq ($(CONFIG_LIB_DBUS),)
 
-CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/unqlite/unqlite}
+CSRCS  += $(wildcard gdbus/*.c)
+CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/dbus/dbus}
+CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/glib/glib/glib}
+CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/glib/glib/}
+CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/glib/}
 
-PRIORITY  = $(CONFIG_KVDB_PRIORITY)
-STACKSIZE = $(CONFIG_KVDB_STACKSIZE)
-MODULE    = $(CONFIG_KVDB)
-
-CSRCS := $(wildcard $(CSRCS))
-MAINSRC := $(wildcard $(MAINSRC))
+endif # CONFIG_LIB_DBUS
 
 include $(APPDIR)/Application.mk
