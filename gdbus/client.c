@@ -1511,7 +1511,7 @@ gboolean g_dbus_client_set_ready_watch(GDBusClient *client,
 }
 
 gboolean g_dbus_client_set_proxy_handlers(GDBusClient *client,
-					GDBusProxyFunction proxy_added,
+					GDBusProxyFunction proxy_added_,
 					GDBusProxyFunction proxy_removed,
 					GDBusPropertyFunction property_changed,
 					void *user_data)
@@ -1519,12 +1519,12 @@ gboolean g_dbus_client_set_proxy_handlers(GDBusClient *client,
 	if (client == NULL)
 		return FALSE;
 
-	client->proxy_added = proxy_added;
+	client->proxy_added = proxy_added_;
 	client->proxy_removed = proxy_removed;
 	client->property_changed = property_changed;
 	client->user_data = user_data;
 
-	if (proxy_added || proxy_removed || property_changed)
+	if (proxy_added_ || proxy_removed || property_changed)
 		get_managed_objects(client);
 
 	return TRUE;
