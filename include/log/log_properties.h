@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Xiaomi Corporation
+ * Copyright (C) 2017 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,9 +14,15 @@
  * limitations under the License.
  */
 
-#ifndef __KVDB_H
-#define __KVDB_H
+#pragma once
 
-#include <cutils/properties.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
 
+/* Returns `1` if the device is debuggable or `0` if not. */
+int __android_log_is_debuggable();
+
+#ifdef __cplusplus
+}
 #endif
