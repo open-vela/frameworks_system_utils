@@ -18,6 +18,10 @@ extern "C" {
 #include <dbus/dbus.h>
 #include <glib.h>
 
+typedef int          gboolean;
+typedef unsigned int guint;
+typedef uint32_t     guint32;
+
 #define g_dbus_setup_bus dbus_setup_bus
 #define g_dbus_setup_private dbus_setup_private
 #define g_dbus_request_name dbus_request_name
