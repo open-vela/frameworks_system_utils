@@ -20,7 +20,7 @@ BIN := $(APPDIR)/staging/libframework.a
 
 CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/frameworks/utils/include}
 
-ifneq ($(CONFIG_LIB_DBUSX),)
+ifneq ($(CONFIG_LIB_DBUS),)
 
 CSRCS  += $(wildcard gdbus/*.c)
 CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/dbus/dbus}
@@ -28,6 +28,6 @@ CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/glib/glib/gl
 CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/glib/glib/}
 CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/glib/}
 
-endif # CONFIG_LIB_DBUSX
+endif # CONFIG_LIB_DBUS
 
 include $(APPDIR)/Application.mk
