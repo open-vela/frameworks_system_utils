@@ -39,7 +39,7 @@ int __system_property_set(const char* __name, const char* __value)
 {
     int ret = property_set(__name, __value);
     if (ret >= 0)
-        atomic_fetch_add(&__system_property_serial_num, 1);
+        __system_property_serial_num++;
 
     return ret;
 }
