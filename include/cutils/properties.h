@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Xiaomi Corporation
+ * Copyright (C) 2006 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,194 +14,138 @@
  * limitations under the License.
  */
 
-#ifndef __CUTILS_PROPERTIES_H
-#define __CUTILS_PROPERTIES_H
+#pragma once
 
+#include <sys/cdefs.h>
+#include <stddef.h>
 #include <stdint.h>
-#include <sys/types.h>
-#include <sys/system_properties.h>
 
-#define PROPERTY_KEY_MAX   PROP_NAME_MAX
+#if __has_include(<sys/system_properties.h>)
+#include <sys/system_properties.h>
+#else
+#define PROP_VALUE_MAX 92
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+//
+// Deprecated.
+//
+// See <android-base/properties.h> for better API.
+//
+
+#define PROPERTY_KEY_MAX PROP_NAME_MAX
 #define PROPERTY_VALUE_MAX PROP_VALUE_MAX
 
-#define PROP_MSG_MAX       (3 + PROP_NAME_MAX + PROP_VALUE_MAX) /* +3 = +1(opcode) +2(len) */
-#define PROP_SERVER_PATH   "kvdbd"
-
-#if defined(__cplusplus)
-extern "C"
-{
-#endif
-
-/**
- * @brief Store Key-Values to database.
- * @param[in] key entry key string
- * @param[in] value entry value string
- * @note Key starting with "persist." will be stored permanently after commit,
- *   others will be lost after reboot.
- * @return On success returns 0, -errno otherwise.
- */
-int property_set(const char* key, const char* value);
-int property_set_oneway(const char* key, const char* value);
-
-/**
- * @brief Retrieve Key-Values from database.
- * @param[in] key entry key string
- * @param[out] value pointer to string buffer
- * @param[in] default_value the value to return on failure
- * @return On success returns the length of the value which will never be greater
- *   than PROP_NAME_MAX - 1 and will always be zero terminated.
- *   (the length does not include the terminating zero).
- *   On failure returns length of default_value.
- */
+/* property_get: returns the length of the value which will never be
+** greater than PROPERTY_VALUE_MAX - 1 and will always be zero terminated.
+** (the length does not include the terminating zero).
+**
+** If the property read fails or returns an empty value, the default
+** value is used (if nonnull).
+*/
 int property_get(const char* key, char* value, const char* default_value);
 
-/**
- * @brief Delete a KV pair by key.
- * @param[in] key entry key string
- * @return On success returns 0, -errno otherwise.
- */
-int property_delete(const char* key);
+/* property_get_bool: returns the value of key coerced into a
+** boolean. If the property is not set, then the default value is returned.
+**
+* The following is considered to be true (1):
+**   "1", "true", "y", "yes", "on"
+**
+** The following is considered to be false (0):
+**   "0", "false", "n", "no", "off"
+**
+** The conversion is whitespace-sensitive (e.g. " off" will not be false).
+**
+** If no property with this key is set (or the key is NULL) or the boolean
+** conversion fails, the default value is returned.
+**/
+int8_t property_get_bool(const char *key, int8_t default_value);
 
-/**
- * @brief Actively commit all property changes.
- * @return On success returns 0, -errno otherwise.
- */
-int property_commit(void);
+/* property_get_int64: returns the value of key truncated and coerced into a
+** int64_t. If the property is not set, then the default value is used.
+**
+** The numeric conversion is identical to strtoimax with the base inferred:
+** - All digits up to the first non-digit characters are read
+** - The longest consecutive prefix of digits is converted to a long
+**
+** Valid strings of digits are:
+** - An optional sign character + or -
+** - An optional prefix indicating the base (otherwise base 10 is assumed)
+**   -- 0 prefix is octal
+**   -- 0x / 0X prefix is hex
+**
+** Leading/trailing whitespace is ignored. Overflow/underflow will cause
+** numeric conversion to fail.
+**
+** If no property with this key is set (or the key is NULL) or the numeric
+** conversion fails, the default value is returned.
+**/
+int64_t property_get_int64(const char *key, int64_t default_value);
 
-/**
- * @brief Reload default property value.
- * @return On success returns 0, -errno otherwise.
- */
-int property_reload(void);
+/* property_get_int32: returns the value of key truncated and coerced into an
+** int32_t. If the property is not set, then the default value is used.
+**
+** The numeric conversion is identical to strtoimax with the base inferred:
+** - All digits up to the first non-digit characters are read
+** - The longest consecutive prefix of digits is converted to a long
+**
+** Valid strings of digits are:
+** - An optional sign character + or -
+** - An optional prefix indicating the base (otherwise base 10 is assumed)
+**   -- 0 prefix is octal
+**   -- 0x / 0X prefix is hex
+**
+** Leading/trailing whitespace is ignored. Overflow/underflow will cause
+** numeric conversion to fail.
+**
+** If no property with this key is set (or the key is NULL) or the numeric
+** conversion fails, the default value is returned.
+**/
+int32_t property_get_int32(const char *key, int32_t default_value);
 
-typedef void (*property_callback)(const char* key, const char* value, void* cookie);
+/* property_set: returns 0 on success, < 0 on failure
+*/
+int property_set(const char *key, const char *value);
 
-/**
- * @brief List all KVs in every database and calls callback function.
- * @param[in] property_callback propfn: callback function
- * @param[in] cookie: cookie data to pass to callback function
- * @return On success returns 0, -errno if all databases fail to open.
- */
-int property_list(property_callback propfn, void* cookie);
+int property_list(void (*propfn)(const char *key, const char *value, void *cookie), void *cookie);
 
-/**
- * @brief Wait the monitored key until its value updated or key deleted
- * @param[in] key the monitored key string, support fnmatch pattern
- * @param[in] timeout the wait timeout time (in milliseconds)
- * @param[out] newkey pointer to a string buffer to receive the key of
- *                    the updated/deleted value
- * @param[out] newvalue pointer to a string buffer to receive the updated
- *                      value or deleted value ('\0')
- * @return On success returns 0, -errno otherwise.
- */
-int property_wait(const char* key, char* newkey, char* newvalue, int timeout);
+#if defined(__BIONIC_FORTIFY)
+#define __property_get_err_str "property_get() called with too small of a buffer"
 
-/**
- * @brief Open a key monitor channel
- * @param[in] key the monitored key string, support fnmatch pattern
- * @return On success returns a file descriptor, -errno otherwise.
- */
-int property_monitor_open(const char* key);
+#if defined(__clang__)
 
-/**
- * @brief Read the monitored key and value
- * @param[in] fd file descriptor returned by property_monitor_open()
- * @param[out] newkey pointer to a string buffer to receive the key of
- *                    the updated/deleted value
- * @param[out] newvalue pointer to a string buffer to receive the updated
- *                      value or deleted value ('\0')
- * @return On success returns 0, -errno otherwise.
- */
-int property_monitor_read(int fd, char* newkey, char* newvalue);
+/* Some projects use -Weverything; diagnose_if is clang-specific. */
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wgcc-compat"
+int property_get(const char* key, char* value, const char* default_value)
+    __clang_error_if(__bos(value) != __BIONIC_FORTIFY_UNKNOWN_SIZE &&
+                         __bos(value) < PROPERTY_VALUE_MAX,
+                     __property_get_err_str);
+#pragma clang diagnostic pop
 
-/**
- * @brief Close a key monitor channel
- * @param[in] fd file descriptor returned by property_monitor_open()
- * @return On success returns 0, -errno otherwise.
- */
-int property_monitor_close(int fd);
+#else /* defined(__clang__) */
 
-/**
- * @brief Saves a boolean to database.
- * @param[in] key entry key string
- * @param[in] value entry boolean value
- * @return On success returns 0, -errno otherwise.
- */
-int property_set_bool(const char* key, int8_t value);
-int property_set_bool_oneway(const char* key, int8_t value);
+extern int __property_get_real(const char *, char *, const char *)
+    __asm__(__USER_LABEL_PREFIX__ "property_get");
+__errordecl(__property_get_too_small_error, __property_get_err_str);
 
-/**
- * @brief Retrieve a Key-Value from database and interpret the value as boolean.
- *   This is taken from Android libcutils:
- *   https://android.googlesource.com/platform/system/core/+/master/libcutils/
- *   properties.cpp
- * @param[in] key entry key string
- * @param[in] value the value to return on failure
- * @return On success returns a boolean, otherwise returns default_value.
- */
-int8_t property_get_bool(const char* key, int8_t default_value);
-
-/**
- * @brief Saves an 32-bit integer to database.
- * @param[in] key entry key string
- * @param[in] value entry value
- * @return On success returns 0, -errno otherwise.
- */
-int property_set_int32(const char* key, int32_t value);
-int property_set_int32_oneway(const char* key, int32_t value);
-
-/**
- * @brief Retrieve a Key-Value from database and interpret the value as int32_t.
- *   This is taken from Android libcutils:
- *   https://android.googlesource.com/platform/system/core/+/master/libcutils/
- *   properties.cpp
- * @param[in] key entry key string
- * @param[in] value the value to return on failure
- * @return On success returns a int32_t, otherwise returns default_value.
- */
-int32_t property_get_int32(const char* key, int32_t default_value);
-
-/**
- * @brief Saves an 64-bit integer to database.
- * @param[in] key entry key string
- * @param[in] value entry value
- * @return On success returns 0, -errno otherwise.
- */
-int property_set_int64(const char* key, int64_t value);
-int property_set_int64_oneway(const char* key, int64_t value);
-
-/**
- * @brief Retrieve a Key-Value from database and interpret the value as int64_t.
- *   This is taken from Android libcutils:
- *   https://android.googlesource.com/platform/system/core/+/master/libcutils/
- *   properties.cpp
- * @param[in] key entry key string
- * @param[in] value the value to return on failure
- * @return On success returns a int64_t, otherwise returns default_value.
- */
-int64_t property_get_int64(const char* key, int64_t default_value);
-
-/**
- * @brief Saves a binary buffer to database.
- * @param[in] key entry key string
- * @param[in] value buffer value
- * @param[in] size entry size
- * @return On success returns 0, -errno otherwise.
- */
-int property_set_buffer(const char* key, const void* value, size_t size);
-int property_set_buffer_oneway(const char* key, const void* value, size_t size);
-
-/**
- * @brief Retrieve a Key-Value from database and interpret as binary buffer.
- * @param[in] key entry key string
- * @param[in] value buffer value
- * @param[in] size buffer size
- * @return On success returns the array length, -errno otherwise.
- */
-ssize_t property_get_buffer(const char* key, void* value, size_t size);
-
-#if defined(__cplusplus)
+__BIONIC_FORTIFY_INLINE
+int property_get(const char *key, char *value, const char *default_value) {
+    size_t bos = __bos(value);
+    if (bos < PROPERTY_VALUE_MAX) {
+        __property_get_too_small_error();
+    }
+    return __property_get_real(key, value, default_value);
 }
-#endif
 
+#endif /* defined(__clang__) */
+
+#undef __property_get_err_str
+#endif /* defined(__BIONIC_FORTIFY) */
+
+#ifdef __cplusplus
+}
 #endif

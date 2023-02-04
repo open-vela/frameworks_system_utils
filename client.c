@@ -413,7 +413,7 @@ out:
  *
  ****************************************************************************/
 
-int property_list(property_callback propfn, void* cookie)
+int property_list(void (*propfn)(const char *key, const char *value, void *cookie), void* cookie)
 {
     int fd = property_connect();
     if (fd < 0)
