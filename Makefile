@@ -18,16 +18,28 @@ include $(APPDIR)/Make.defs
 
 BIN := $(APPDIR)/staging/libframework.a
 
-CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/frameworks/utils/include}
-
 ifneq ($(CONFIG_LIB_DBUS),)
-
 CSRCS  += $(wildcard gdbus/*.c)
 CFLAGS += -DDBUS_COMPILATION -DVERSION="1.15.1"
 CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/dbus/dbus}
 CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/glib/glib/glib}
 CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/glib/glib/}
-
 endif # CONFIG_LIB_DBUS
+
+ifneq ($(CONFIG_KVDB),)
+CSRCS     += kvdb/client.c kvdb/system_properties.c
+MAINSRC   += kvdb/setprop.c kvdb/getprop.c
+PROGNAME  += setprop getprop
+endif # CONFIG_KVDB
+
+ifneq ($(CONFIG_KVDB_SERVER),)
+CFLAGS    += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/unqlite/unqlite}
+MAINSRC   += server.c
+PROGNAME  += kvdbd
+endif # CONFIG_KVDB_SERVER
+
+PRIORITY  = $(CONFIG_KVDB_PRIORITY)
+STACKSIZE = $(CONFIG_KVDB_STACKSIZE)
+MODULE    = $(CONFIG_KVDB)
 
 include $(APPDIR)/Application.mk
