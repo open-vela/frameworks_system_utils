@@ -34,7 +34,7 @@ endif # CONFIG_KVDB
 
 ifneq ($(CONFIG_KVDB_SERVER),)
 CFLAGS    += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/unqlite/unqlite}
-MAINSRC   += server.c
+MAINSRC   += kvdb/server.c
 PROGNAME  += kvdbd
 endif # CONFIG_KVDB_SERVER
 
