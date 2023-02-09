@@ -17,12 +17,13 @@
 #pragma once
 
 #include <stdbool.h>
-#include <sys/cdefs.h>
 #include <sys/types.h>
 
 #include <android/log.h>
 
-__BEGIN_DECLS
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*
  * Normally we strip the effects of ALOGV (VERBOSE messages),
@@ -375,4 +376,6 @@ int __android_log_is_loggable_len(int prio, const char* tag, size_t len, int def
 #pragma clang diagnostic pop
 #endif
 
-__END_DECLS
+#ifdef __cplusplus
+}
+#endif
