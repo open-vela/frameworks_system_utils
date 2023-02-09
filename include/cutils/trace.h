@@ -22,12 +22,13 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <sys/cdefs.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <cutils/compiler.h>
 
-__BEGIN_DECLS
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  * The ATRACE_TAG macro can be defined before including this header to trace
@@ -300,6 +301,8 @@ static inline void atrace_int64(uint64_t tag, const char* name, int64_t value)
     }
 }
 
-__END_DECLS
+#ifdef __cplusplus
+}
+#endif
 
 #endif // _LIBS_CUTILS_TRACE_H

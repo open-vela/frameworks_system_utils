@@ -33,9 +33,9 @@
  * @brief The android_set_abort_message() function.
  */
 
-#include <sys/cdefs.h>
-
-__BEGIN_DECLS
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  * android_set_abort_message() sets the abort message that will be shown
@@ -48,4 +48,6 @@ __BEGIN_DECLS
  */
 void android_set_abort_message(const char* __msg);
 
-__END_DECLS
+#ifdef __cplusplus
+}
+#endif

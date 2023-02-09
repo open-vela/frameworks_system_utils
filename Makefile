@@ -18,6 +18,8 @@ include $(APPDIR)/Make.defs
 
 BIN := $(APPDIR)/staging/libframework.a
 
+CSRCS += log/log_write.c log/set_abort_message.c
+
 ifneq ($(CONFIG_LIB_DBUS),)
 CSRCS  += $(wildcard gdbus/*.c)
 CFLAGS += -DDBUS_COMPILATION -DVERSION="1.15.1"
