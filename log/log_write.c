@@ -487,3 +487,12 @@ void __android_log_set_default_tag(const char* tag)
         setenv("ANDROID_LOG_DEFAULT_TAG", tag, true);
     }
 }
+
+int __android_log_error_write(int tag, const char* subTag, int32_t uid,
+    const char* data, uint32_t dataLen)
+{
+    __android_log_print(ANDROID_LOG_ERROR, subTag,
+           "tag: %d uid: %"PRId32" data: %s\n",
+           tag, uid, data);
+    return 0;
+}
