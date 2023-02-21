@@ -16,8 +16,6 @@
 
 include $(APPDIR)/Make.defs
 
-BIN := $(APPDIR)/staging/libframework.a
-
 CSRCS += log/log_write.c log/set_abort_message.c
 
 ifneq ($(CONFIG_LIB_DBUS),)
@@ -43,5 +41,15 @@ endif # CONFIG_KVDB_SERVER
 PRIORITY  = $(CONFIG_KVDB_PRIORITY)
 STACKSIZE = $(CONFIG_KVDB_STACKSIZE)
 MODULE    = $(CONFIG_KVDB)
+
+ASRCS := $(wildcard $(ASRCS))
+CSRCS := $(wildcard $(CSRCS))
+CXXSRCS := $(wildcard $(CXXSRCS))
+MAINSRC := $(wildcard $(MAINSRC))
+NOEXPORTSRCS = $(ASRCS)$(CSRCS)$(CXXSRCS)$(MAINSRC)
+
+ifneq ($(NOEXPORTSRCS),)
+BIN := $(APPDIR)/staging/libframework.a
+endif
 
 include $(APPDIR)/Application.mk
