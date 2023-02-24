@@ -164,8 +164,10 @@ static int property_set_(const char* key, const char* value, bool oneway)
 
 again:
     fd = property_connect();
-    if (fd < 0)
+    if (fd < 0) {
+        KVERR("connect failed, fd=%d\n", fd);
         return fd;
+    }
 
     /*-----------------------------------------*
      | 1 |   1   |   1   | key_len |  val_len  |
@@ -197,6 +199,7 @@ again:
         }
 
         ret = -errno;
+        KVERR("sendmsg failed, ret=%d\n", ret);
         goto out;
     }
 
@@ -211,6 +214,7 @@ again:
         int32_t err;
         ret = recv(fd, &err, 4, 0);
         if (ret < 4) {
+            KVERR("recv failed, ret=%d\n", ret);
             ret = ret < 0 ? -errno : -EINVAL;
             goto out;
         }
@@ -263,8 +267,10 @@ int property_get(const char* key, char* value, const char* default_value)
         goto out;
 
     int fd = property_connect();
-    if (fd < 0)
+    if (fd < 0) {
+        KVERR("connect failed, fd=%d\n", fd);
         goto out;
+    }
 
     /*---------------------*
      | 1 |   1   | key_len |
@@ -285,8 +291,11 @@ int property_get(const char* key, char* value, const char* default_value)
     msg.msg_iov = iov;
     msg.msg_iovlen = 2;
 
-    if (sendmsg(fd, &msg, 0) < 0)
+    int ret = sendmsg(fd, &msg, 0);
+    if (ret < 0) {
+        KVERR("sendmsg failed, errno=%d\n", errno);
         goto out_fd;
+    }
 
     /*-----------*
      |  val_len  |
@@ -300,8 +309,10 @@ int property_get(const char* key, char* value, const char* default_value)
         /* value is not NULL, receive all the value */
 
         val_len = recv(fd, value, PROP_VALUE_MAX, 0);
-        if (val_len <= 0 || value[--val_len])
+        if (val_len <= 0 || value[--val_len]) {
+            KVERR("recv failed, val_len=%d\n", val_len);
             goto out_fd;
+        }
     } else {
         /* value is NULL, receive two chars to check whether this
          * [key, value] exists
@@ -309,8 +320,10 @@ int property_get(const char* key, char* value, const char* default_value)
 
         char tmpvalue[2];
         val_len = recv(fd, tmpvalue, 2, 0);
-        if (val_len <= 0)
+        if (val_len <= 0) {
+            KVERR("recv failed, val_len=%d\n", val_len);
             goto out_fd;
+        }
     }
 
     close(fd);
@@ -350,8 +363,10 @@ int property_delete(const char* key)
         return -E2BIG;
 
     int fd = property_connect();
-    if (fd < 0)
+    if (fd < 0) {
+        KVERR("connect failed, fd=%d\n", fd);
         return fd;
+    }
 
     /*---------------------*
      | 1 |   1   | key_len |
@@ -375,6 +390,7 @@ int property_delete(const char* key)
     int ret = sendmsg(fd, &msg, 0);
     if (ret < 0) {
         ret = -errno;
+        KVERR("sendmsg failed, ret=%d\n", ret);
         goto out;
     }
 
@@ -387,6 +403,7 @@ int property_delete(const char* key)
     int32_t err;
     ret = recv(fd, &err, 4, 0);
     if (ret < 4) {
+        KVERR("recv failed, ret=%d\n", ret);
         ret = ret < 0 ? -errno : -EINVAL;
         goto out;
     }
@@ -416,8 +433,10 @@ out:
 int property_list(void (*propfn)(const char* key, const char* value, void* cookie), void* cookie)
 {
     int fd = property_connect();
-    if (fd < 0)
+    if (fd < 0) {
+        KVERR("connect failed, fd=%d\n", fd);
         return fd;
+    }
 
     /*---*
      | 1 |
@@ -428,6 +447,7 @@ int property_list(void (*propfn)(const char* key, const char* value, void* cooki
     int ret = send(fd, "L", 1, 0);
     if (ret < 0) {
         ret = -errno;
+        KVERR("send failed, ret=%d\n", ret);
         goto out;
     }
 
@@ -442,6 +462,7 @@ int property_list(void (*propfn)(const char* key, const char* value, void* cooki
         ret = recv_safe(fd, msg, 0, 2);
         if (ret < 0) {
             ret = -errno;
+            KVERR("recv_safe failed, ret=%d\n", ret);
             goto out;
         }
 
@@ -461,8 +482,10 @@ int property_list(void (*propfn)(const char* key, const char* value, void* cooki
 
         size_t total = key_len + val_len + 2;
         ret = recv_safe(fd, msg, 2, total);
-        if (ret < 0)
+        if (ret < 0) {
+            KVERR("recv_safe failed, ret=%d\n", ret);
             break;
+        }
 
         const char* key = msg + 2;
         const char* value = key + key_len;
@@ -513,6 +536,7 @@ int property_wait(const char* key, char* newkey, char* newvalue, int timeout)
     int ret = poll(&fds, 1, timeout);
     if (ret < 0) {
         ret = -errno;
+        KVERR("poll failed, ret=%d\n", ret);
         goto out;
     } else if (ret == 0 || (fds.revents & POLLIN) == 0) {
         ret = -ETIMEDOUT;
@@ -550,8 +574,10 @@ int property_monitor_open(const char* key)
         return -E2BIG;
 
     int fd = property_connect();
-    if (fd < 0)
+    if (fd < 0) {
+        KVERR("connect failed, fd=%d\n", fd);
         return fd;
+    }
 
     /*------------------------*
     |   1   |   1   | key_len |
@@ -572,6 +598,7 @@ int property_monitor_open(const char* key)
 
     int ret = sendmsg(fd, &msg, 0);
     if (ret < 0) {
+        KVERR("sendmsg failed, ret=%d\n", ret);
         ret = -errno;
         goto out;
     }
@@ -585,6 +612,7 @@ int property_monitor_open(const char* key)
     int32_t err;
     ret = recv(fd, &err, 4, 0);
     if (ret < 4) {
+        KVERR("recv failed, ret=%d\n", ret);
         ret = ret < 0 ? -errno : -EINVAL;
         goto out;
     }
@@ -623,8 +651,10 @@ int property_monitor_read(int fd, char* newkey, char* newvalue)
 {
     char msg[PROP_MSG_MAX];
     ssize_t ret = recv(fd, msg, 2, 0);
-    if (ret < 2)
+    if (ret < 2) {
+        KVERR("recv failed, ret=%d, errno=%d\n", ret, errno);
         return ret < 0 ? -errno : -ENODATA;
+    }
 
     size_t key_len = (unsigned char)msg[0];
     if (key_len > PROP_NAME_MAX)
@@ -636,8 +666,10 @@ int property_monitor_read(int fd, char* newkey, char* newvalue)
 
     size_t total = key_len + val_len + 2;
     ret = recv_safe(fd, msg, ret, total);
-    if (ret < 0)
+    if (ret < 0) {
+        KVERR("recv_safe failed, ret=%d\n", ret);
         return ret;
+    }
 
     const char* key = &msg[2];
     if (newkey != NULL)
