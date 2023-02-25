@@ -20,15 +20,15 @@
 
 #include <ctype.h>
 #include <errno.h>
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <poll.h>
 
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <sys/time.h>
 #include <netpacket/rpmsg.h>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <sys/un.h>
 
 #include <kvdb.h>
 
@@ -54,7 +54,7 @@ static inline int ascii2nibble(char ascii)
         return -ERANGE;
 }
 
-static ssize_t recv_safe(int sockfd, char *buf, size_t offset, size_t len)
+static ssize_t recv_safe(int sockfd, char* buf, size_t offset, size_t len)
 {
     while (offset < len) {
         ssize_t ret = recv(sockfd, buf + offset, len - offset, 0);
@@ -95,7 +95,7 @@ static int property_connect(void)
 
 #if CONFIG_KVDB_TIMEOUT_INTERVAL
     struct timeval timeout = {
-        .tv_sec  = CONFIG_KVDB_TIMEOUT_INTERVAL,
+        .tv_sec = CONFIG_KVDB_TIMEOUT_INTERVAL,
         .tv_usec = 0,
     };
     setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
@@ -178,13 +178,13 @@ again:
     };
 
     struct iovec iov[3] = {
-        {.iov_base = cmd         , .iov_len = 3      },
-        {.iov_base = (char*)key  , .iov_len = key_len},
-        {.iov_base = (char*)value, .iov_len = val_len},
+        { .iov_base = cmd, .iov_len = 3 },
+        { .iov_base = (char*)key, .iov_len = key_len },
+        { .iov_base = (char*)value, .iov_len = val_len },
     };
 
-    struct msghdr msg = {0};
-    msg.msg_iov    = iov;
+    struct msghdr msg = { 0 };
+    msg.msg_iov = iov;
     msg.msg_iovlen = 3;
 
     int ret = sendmsg(fd, &msg, 0);
@@ -277,12 +277,12 @@ int property_get(const char* key, char* value, const char* default_value)
     };
 
     struct iovec iov[2] = {
-        {.iov_base = cmd       , .iov_len = 2      },
-        {.iov_base = (char*)key, .iov_len = key_len},
+        { .iov_base = cmd, .iov_len = 2 },
+        { .iov_base = (char*)key, .iov_len = key_len },
     };
 
-    struct msghdr msg = {0};
-    msg.msg_iov    = iov;
+    struct msghdr msg = { 0 };
+    msg.msg_iov = iov;
     msg.msg_iovlen = 2;
 
     if (sendmsg(fd, &msg, 0) < 0)
@@ -364,12 +364,12 @@ int property_delete(const char* key)
     };
 
     struct iovec iov[2] = {
-        {.iov_base = cmd       , .iov_len = 2      },
-        {.iov_base = (char*)key, .iov_len = key_len},
+        { .iov_base = cmd, .iov_len = 2 },
+        { .iov_base = (char*)key, .iov_len = key_len },
     };
 
-    struct msghdr msg = {0};
-    msg.msg_iov    = iov;
+    struct msghdr msg = { 0 };
+    msg.msg_iov = iov;
     msg.msg_iovlen = 2;
 
     int ret = sendmsg(fd, &msg, 0);
@@ -413,7 +413,7 @@ out:
  *
  ****************************************************************************/
 
-int property_list(void (*propfn)(const char *key, const char *value, void *cookie), void* cookie)
+int property_list(void (*propfn)(const char* key, const char* value, void* cookie), void* cookie)
 {
     int fd = property_connect();
     if (fd < 0)
@@ -464,7 +464,7 @@ int property_list(void (*propfn)(const char *key, const char *value, void *cooki
         if (ret < 0)
             break;
 
-        const char* key   = msg + 2;
+        const char* key = msg + 2;
         const char* value = key + key_len;
         if (key[key_len - 1] || value[val_len - 1])
             continue;
@@ -506,16 +506,15 @@ int property_wait(const char* key, char* newkey, char* newvalue, int timeout)
         return fd;
 
     struct pollfd fds = {
-      .fd = fd,
-      .events = POLLIN
+        .fd = fd,
+        .events = POLLIN
     };
 
     int ret = poll(&fds, 1, timeout);
     if (ret < 0) {
-      ret = -errno;
-      goto out;
-    }
-    else if (ret == 0 || (fds.revents & POLLIN) == 0) {
+        ret = -errno;
+        goto out;
+    } else if (ret == 0 || (fds.revents & POLLIN) == 0) {
         ret = -ETIMEDOUT;
         goto out;
     }
@@ -560,15 +559,15 @@ int property_monitor_open(const char* key)
     |  'M'  |key_len|[key'\0']|
     *-------------------------*/
 
-    char cmd[2] = {'M', key_len};
+    char cmd[2] = { 'M', key_len };
 
     struct iovec iov[2] = {
-        {.iov_base = cmd         , .iov_len = 2      },
-        {.iov_base = (char*)key  , .iov_len = key_len},
+        { .iov_base = cmd, .iov_len = 2 },
+        { .iov_base = (char*)key, .iov_len = key_len },
     };
 
-    struct msghdr msg = {0};
-    msg.msg_iov    = iov;
+    struct msghdr msg = { 0 };
+    msg.msg_iov = iov;
     msg.msg_iovlen = 2;
 
     int ret = sendmsg(fd, &msg, 0);
@@ -821,7 +820,7 @@ int32_t property_get_int32(const char* key, int32_t default_value)
     errno = 0;
     char* end;
     int32_t ret = strtol(value, &end, 0);
-    if (errno ||  *end)
+    if (errno || *end)
         return default_value;
 
     return ret;
@@ -912,7 +911,7 @@ int64_t property_get_int64(const char* key, int64_t default_value)
  ****************************************************************************/
 
 static int property_set_buffer_(const char* key, const void* value,
-                                size_t size, bool oneway)
+    size_t size, bool oneway)
 {
     size_t buf_size = 2 * size;
     if (buf_size >= PROP_VALUE_MAX)
@@ -956,7 +955,7 @@ int property_set_buffer_oneway(const char* key, const void* value, size_t size)
  *   On success returns buffer length.
  *   On failure returns -errno.
  *
- ****************************************************************************/\
+ ****************************************************************************/
 
 ssize_t property_get_buffer(const char* key, void* value, size_t size)
 {
