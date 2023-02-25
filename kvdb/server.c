@@ -15,33 +15,33 @@
  */
 
 #include <errno.h>
+#include <fnmatch.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <fnmatch.h>
 
-#include <sys/epoll.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <sys/time.h>
-#include <sys/queue.h>
 #include <netpacket/rpmsg.h>
+#include <sys/epoll.h>
+#include <sys/queue.h>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <sys/un.h>
 
 #include <kvdb.h>
 #include <unqlite.h>
 
-#define KVDB_MEM                0
-#define KVDB_PERSIST            1
-#define KVDB_COUNT              2
+#define KVDB_MEM 0
+#define KVDB_PERSIST 1
+#define KVDB_COUNT 2
 
-#define KVFD_LOCAL              0
-#define KVFD_REMOTE             1
-#define KVFD_COUNT              2
+#define KVFD_LOCAL 0
+#define KVFD_REMOTE 1
+#define KVFD_COUNT 2
 
-#define KVFD_MAX                8
+#define KVFD_MAX 8
 
 #ifndef MIN
-    #define MIN(n,m)   (((n) < (m)) ? (n) : (m))
+#define MIN(n, m) (((n) < (m)) ? (n) : (m))
 #endif
 
 /****************************************************************************
@@ -49,8 +49,8 @@
  ****************************************************************************/
 
 typedef int (*kvdb_consume)(const char* key, size_t key_len,
-                            const char* value, size_t val_len,
-                            void* cookie);
+    const char* value, size_t val_len,
+    void* cookie);
 
 typedef struct kvdb_consume_data {
     kvdb_consume consume;
@@ -61,17 +61,18 @@ typedef struct kvdb_consume_data {
 } kvdb_consume_data;
 
 typedef struct kvdb_monitor {
-    int                      fd;
-    LIST_ENTRY(kvdb_monitor) entry;
-    char                     key[0];
+    int fd;
+    LIST_ENTRY(kvdb_monitor)
+    entry;
+    char key[0];
 } kvdb_monitor;
 
 typedef LIST_HEAD(kvdb_monitor_head, kvdb_monitor) kvdb_monitor_head;
 
 typedef struct kvdb {
-    int               fd[KVFD_COUNT];
-    unqlite*          db[KVDB_COUNT];
-    int               efd;
+    int fd[KVFD_COUNT];
+    unqlite* db[KVDB_COUNT];
+    int efd;
     kvdb_monitor_head head;
 } kvdb;
 
@@ -99,7 +100,7 @@ static int kvdb_get_index(const char* key)
 }
 
 static int kvdb_set(unqlite* db[], const char* key, size_t key_len,
-                    const char* value, size_t val_len, bool force)
+    const char* value, size_t val_len, bool force)
 {
     if (--key_len >= PROP_NAME_MAX)
         return -E2BIG;
@@ -113,7 +114,7 @@ static int kvdb_set(unqlite* db[], const char* key, size_t key_len,
     if (value[val_len])
         return -EINVAL;
 
-    if(kvdb_is_readonly(key) && !force)
+    if (kvdb_is_readonly(key) && !force)
         return -EPERM;
 
     /* in environment variable? */
@@ -177,7 +178,7 @@ static int kvdb_delete(unqlite* db[], const char* key, size_t key_len)
     if (key[key_len])
         return -EINVAL;
 
-    if(kvdb_is_readonly(key))
+    if (kvdb_is_readonly(key))
         return -EPERM;
 
     /* in environment variable? */
@@ -218,8 +219,8 @@ static int kvdb_list(unqlite* db[], kvdb_consume consume, void* cookie)
 
         kvdb_consume_data data = {
             .consume = consume,
-            .cookie  = cookie,
-            .cur     = cur,
+            .cookie = cookie,
+            .cur = cur,
         };
 
         unqlite_kv_cursor_first_entry(cur);
@@ -262,10 +263,10 @@ static void kvdb_uninit(unqlite* db[])
 
 static int kvdb_load(unqlite* db[], bool force)
 {
-    const char *src = CONFIG_KVDB_SOURCE_PATH;
+    const char* src = CONFIG_KVDB_SOURCE_PATH;
     char tmpb[PATH_MAX];
-    const char *path = tmpb;
-    const char *sep;
+    const char* path = tmpb;
+    const char* sep;
 
     while (*src) {
         sep = strchr(src, ';');
@@ -297,7 +298,7 @@ static int kvdb_load(unqlite* db[], bool force)
                 continue;
 
             size_t key_len = strlen(key) + 1;
-            if(!force && kvdb_get(db, key, key_len, NULL) >= 0)
+            if (!force && kvdb_get(db, key, key_len, NULL) >= 0)
                 continue;
 
             kvdb_set(db, key, key_len, value, strlen(value) + 1, true);
@@ -312,7 +313,7 @@ static int kvdb_load(unqlite* db[], bool force)
  * add the pollfd to the pollfd array.
  */
 static int kvdb_monitor_open(kvdb* kv, int fd, const char* key,
-                             size_t key_len)
+    size_t key_len)
 {
     /* Malloc monitor element to store [key, fd] pair */
     kvdb_monitor* mon = zalloc(sizeof(kvdb_monitor) + key_len);
@@ -374,20 +375,21 @@ static void kvdb_monitor_notify(kvdb* kv, const char* key, const char* value)
       *-------------------------*/
 
     size_t val_len = value ? strlen(value) + 1 : 0;
-    char cmd[2] = {key_len, val_len};
+    char cmd[2] = { key_len, val_len };
     struct iovec iov[3] = {
-        {.iov_base = cmd          , .iov_len = 2      },
-        {.iov_base = (char *)key  , .iov_len = key_len},
-        {.iov_base = (char *)value, .iov_len = val_len},
+        { .iov_base = cmd, .iov_len = 2 },
+        { .iov_base = (char*)key, .iov_len = key_len },
+        { .iov_base = (char*)value, .iov_len = val_len },
     };
 
-    struct msghdr msg = {0};
+    struct msghdr msg = { 0 };
     msg.msg_iov = iov;
     msg.msg_iovlen = value ? 3 : 2;
 
     kvdb_monitor* mon;
     kvdb_monitor* tmp;
-    LIST_FOREACH_SAFE(mon, &kv->head, entry, tmp) {
+    LIST_FOREACH_SAFE(mon, &kv->head, entry, tmp)
+    {
         if (fnmatch(mon->key, key, FNM_NOESCAPE) != 0)
             continue;
 
@@ -403,7 +405,7 @@ static void kvdb_monitor_notify(kvdb* kv, const char* key, const char* value)
 static int kvdb_init(unqlite* db[])
 {
     static const char* path[KVDB_COUNT] = {
-        [KVDB_MEM]     = "",
+        [KVDB_MEM] = "",
         [KVDB_PERSIST] = CONFIG_KVDB_PERSIST_PATH,
     };
 
@@ -438,28 +440,28 @@ out:
 static int kvdb_bind(int fd[])
 {
     const int family[] = {
-        [KVFD_LOCAL]  = AF_UNIX,
+        [KVFD_LOCAL] = AF_UNIX,
         [KVFD_REMOTE] = AF_RPMSG,
     };
 
     const struct sockaddr_un addr0 = {
         .sun_family = AF_UNIX,
-        .sun_path   = PROP_SERVER_PATH,
+        .sun_path = PROP_SERVER_PATH,
     };
 
     const struct sockaddr_rpmsg addr1 = {
         .rp_family = AF_RPMSG,
-        .rp_cpu    = "",
-        .rp_name   = PROP_SERVER_PATH,
+        .rp_cpu = "",
+        .rp_name = PROP_SERVER_PATH,
     };
 
     const struct sockaddr* addr[] = {
-        [KVFD_LOCAL]  = (const struct sockaddr*)&addr0,
+        [KVFD_LOCAL] = (const struct sockaddr*)&addr0,
         [KVFD_REMOTE] = (const struct sockaddr*)&addr1,
     };
 
     const socklen_t addrlen[] = {
-        [KVFD_LOCAL]  = sizeof(struct sockaddr_un),
+        [KVFD_LOCAL] = sizeof(struct sockaddr_un),
         [KVFD_REMOTE] = sizeof(struct sockaddr_rpmsg),
     };
 
@@ -490,21 +492,21 @@ static void kvdb_unbind(int fd[])
 }
 
 static int kvdb_list_consume(const char* key, size_t key_len,
-                             const char* value, size_t val_len,
-                             void* cookie)
+    const char* value, size_t val_len,
+    void* cookie)
 {
     char cmd[2] = {
         key_len, val_len
     };
 
     struct iovec iov[3] = {
-        {.iov_base = cmd         , .iov_len = 2      },
-        {.iov_base = (char*)key  , .iov_len = key_len},
-        {.iov_base = (char*)value, .iov_len = val_len},
+        { .iov_base = cmd, .iov_len = 2 },
+        { .iov_base = (char*)key, .iov_len = key_len },
+        { .iov_base = (char*)value, .iov_len = val_len },
     };
 
-    struct msghdr msg = {0};
-    msg.msg_iov    = iov;
+    struct msghdr msg = { 0 };
+    msg.msg_iov = iov;
     msg.msg_iovlen = 3;
 
     int fd = (int)cookie;
@@ -512,7 +514,7 @@ static int kvdb_list_consume(const char* key, size_t key_len,
     return ret > 0 ? 0 : ret;
 }
 
-static ssize_t kvdb_recv(int sockfd, char *buf, size_t offset, size_t len)
+static ssize_t kvdb_recv(int sockfd, char* buf, size_t offset, size_t len)
 {
     while (offset < len) {
         ssize_t ret = recv(sockfd, buf + offset, len - offset, 0);
@@ -533,7 +535,7 @@ static bool kvdb_client(kvdb* kv, int fd)
 
 #if CONFIG_KVDB_TIMEOUT_INTERVAL
     struct timeval timeout = {
-        .tv_sec  = CONFIG_KVDB_TIMEOUT_INTERVAL,
+        .tv_sec = CONFIG_KVDB_TIMEOUT_INTERVAL,
         .tv_usec = 0,
     };
     setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
@@ -548,92 +550,92 @@ static bool kvdb_client(kvdb* kv, int fd)
         goto out;
 
     switch (msg[0]) {
-        case 'D': {
-            size_t key_len = (unsigned char)msg[1];
-            size_t end_pos = key_len + 2;
-            if (end_pos >= PROP_MSG_MAX)
-                break;
+    case 'D': {
+        size_t key_len = (unsigned char)msg[1];
+        size_t end_pos = key_len + 2;
+        if (end_pos >= PROP_MSG_MAX)
+            break;
 
-            const char* key = msg + 2;
-            len = kvdb_recv(fd, msg, len, end_pos);
-            if (len > 0) {
-                int32_t err = kvdb_delete(kv->db, key, key_len);
-                if (err >= 0) {
-                    dirty = true;
-                    kvdb_monitor_notify(kv, key, NULL);
-                }
-                send(fd, &err, 4, 0);
+        const char* key = msg + 2;
+        len = kvdb_recv(fd, msg, len, end_pos);
+        if (len > 0) {
+            int32_t err = kvdb_delete(kv->db, key, key_len);
+            if (err >= 0) {
+                dirty = true;
+                kvdb_monitor_notify(kv, key, NULL);
             }
-            break;
+            send(fd, &err, 4, 0);
         }
-        case 'G': {
-            size_t key_len = (unsigned char)msg[1];
-            size_t end_pos = key_len + 2;
-            if (end_pos >= PROP_MSG_MAX)
-                break;
+        break;
+    }
+    case 'G': {
+        size_t key_len = (unsigned char)msg[1];
+        size_t end_pos = key_len + 2;
+        if (end_pos >= PROP_MSG_MAX)
+            break;
 
-            const char* key = msg + 2;
-            char value[PROP_VALUE_MAX];
-            len = kvdb_recv(fd, msg, len, end_pos);
-            if (len > 0) {
-                len = kvdb_get(kv->db, key, key_len, value);
-                if (len > 0)
-                    send(fd, value, len, 0);
-            }
-            break;
+        const char* key = msg + 2;
+        char value[PROP_VALUE_MAX];
+        len = kvdb_recv(fd, msg, len, end_pos);
+        if (len > 0) {
+            len = kvdb_get(kv->db, key, key_len, value);
+            if (len > 0)
+                send(fd, value, len, 0);
         }
-        case 'S': {
-            size_t key_len = (unsigned char)msg[1];
-            size_t val_len = (unsigned char)msg[2];
-            size_t end_pos = key_len + val_len + 3;
-            if (end_pos >= PROP_MSG_MAX)
-                break;
+        break;
+    }
+    case 'S': {
+        size_t key_len = (unsigned char)msg[1];
+        size_t val_len = (unsigned char)msg[2];
+        size_t end_pos = key_len + val_len + 3;
+        if (end_pos >= PROP_MSG_MAX)
+            break;
 
-            const char* key = msg + 3;
-            const char* value = key + key_len;
-            len = kvdb_recv(fd, msg, len, end_pos);
-            if (len > 0) {
-                int32_t err = kvdb_set(kv->db, key, key_len, value, val_len, false);
-                if (err >= 0) {
-                    dirty = true;
-                    kvdb_monitor_notify(kv, key, value);
-                }
-                send(fd, &err, 4, 0);
+        const char* key = msg + 3;
+        const char* value = key + key_len;
+        len = kvdb_recv(fd, msg, len, end_pos);
+        if (len > 0) {
+            int32_t err = kvdb_set(kv->db, key, key_len, value, val_len, false);
+            if (err >= 0) {
+                dirty = true;
+                kvdb_monitor_notify(kv, key, value);
             }
-            break;
+            send(fd, &err, 4, 0);
         }
-        case 'L': {
-            kvdb_list(kv->db, kvdb_list_consume, (void *)(uintptr_t)fd);
-            send(fd, "\0", 2, 0); /* terminator */
+        break;
+    }
+    case 'L': {
+        kvdb_list(kv->db, kvdb_list_consume, (void*)(uintptr_t)fd);
+        send(fd, "\0", 2, 0); /* terminator */
+        break;
+    }
+    case 'C': {
+        kvdb_commit(kv->db);
+        break;
+    }
+    case 'R': {
+        kvdb_load(kv->db, true);
+        break;
+    }
+    case 'M': {
+        /* Property monitor open operation */
+        size_t key_len = (unsigned char)msg[1];
+        size_t end_pos = key_len + 2;
+        if (end_pos >= PROP_MSG_MAX)
             break;
-        }
-        case 'C': {
-            kvdb_commit(kv->db);
-            break;
-        }
-        case 'R': {
-            kvdb_load(kv->db, true);
-            break;
-        }
-        case 'M': {
-            /* Property monitor open operation */
-            size_t key_len = (unsigned char)msg[1];
-            size_t end_pos = key_len + 2;
-            if (end_pos >= PROP_MSG_MAX)
-                break;
 
-            const char* key = msg + 2;
-            len = kvdb_recv(fd, msg, len, end_pos);
-            if (len < 0 || key[key_len - 1]) {
-                break;
-            }
-            if (len > 0) {
-                int32_t err = kvdb_monitor_open(kv, fd, key, key_len);
-                send(fd, &err, 4, 0);
-            }
-            /* Direct return, not close the monitor fd */
-            return false;
+        const char* key = msg + 2;
+        len = kvdb_recv(fd, msg, len, end_pos);
+        if (len < 0 || key[key_len - 1]) {
+            break;
         }
+        if (len > 0) {
+            int32_t err = kvdb_monitor_open(kv, fd, key, key_len);
+            send(fd, &err, 4, 0);
+        }
+        /* Direct return, not close the monitor fd */
+        return false;
+    }
     }
 
 out:
