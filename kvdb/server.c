@@ -396,6 +396,7 @@ static void kvdb_monitor_notify(kvdb* kv, const char* key, const char* value)
         if (sendmsg(mon->fd, &msg, 0) < 0) {
             /* Client close or some error happends, stop monitor */
             LIST_REMOVE(mon, entry);
+            epoll_ctl(kv->efd, EPOLL_CTL_DEL, mon->fd, NULL);
             close(mon->fd);
             free(mon);
         }
