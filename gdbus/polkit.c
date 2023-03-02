@@ -13,7 +13,7 @@
 #include <dbus/dbus.h>
 #include "gdbus.h"
 
-int polkit_check_authorization(DBusConnection *conn,
+int dbus_polkit_check_authorization(DBusConnection *conn,
 				const char *action, gboolean interaction,
 				void (*function) (dbus_bool_t authorized,
 							void *user_data),
@@ -124,7 +124,7 @@ done:
 #define AUTHORITY_INTF	"org.freedesktop.PolicyKit1.Authority"
 #define AUTHORITY_PATH	"/org/freedesktop/PolicyKit1/Authority"
 
-int polkit_check_authorization(DBusConnection *conn,
+int dbus_polkit_check_authorization(DBusConnection *conn,
 				const char *action, gboolean interaction,
 				void (*function) (dbus_bool_t authorized,
 							void *user_data),

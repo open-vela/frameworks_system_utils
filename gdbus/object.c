@@ -338,7 +338,7 @@ void dbus_pending_error(DBusConnection *connection,
 	va_end(args);
 }
 
-int polkit_check_authorization(DBusConnection *conn,
+int dbus_polkit_check_authorization(DBusConnection *conn,
 				const char *action, gboolean interaction,
 				void (*function) (dbus_bool_t authorized,
 							void *user_data),
@@ -373,7 +373,7 @@ static void builtin_security_function(DBusConnection *conn,
 	data->conn = conn;
 	data->pending = pending_reply;
 
-	if (polkit_check_authorization(conn, action, interaction,
+	if (dbus_polkit_check_authorization(conn, action, interaction,
 				builtin_security_result, data, 30000) < 0)
 		dbus_pending_error(conn, pending_reply, NULL, NULL);
 }
