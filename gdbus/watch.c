@@ -318,7 +318,6 @@ static void filter_data_call_and_free(struct filter_data *data)
 			cb->disc_func(data->connection, cb->user_data);
 		if (cb->destroy_func)
 			cb->destroy_func(cb->user_data);
-		free(cb);
 	}
 
 	filter_data_free(data);
