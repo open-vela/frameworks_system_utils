@@ -1260,26 +1260,22 @@ static void parse_interfaces(GDBusClient *client, const char *path,
 	}
 }
 
-static void get_properties_reply_not_standard(DBusMessage *message,
-					void *user_data)
+static void get_properties_reply_not_standard(DBusPendingCall *call, void *user_data)
 {
 	GDBusProxy *proxy = user_data;
 	GDBusClient *client = proxy->client;
+	DBusMessage *message = dbus_pending_call_steal_reply(call);
 	DBusMessageIter array;
 	DBusError error;
 
-	dbus_proxy_ref(proxy);
 	dbus_error_init(&error);
 
 	if (dbus_set_error_from_message(&error, message)) {
-		dbus_error_free(&error);
-		dbus_proxy_unref(proxy);
-		return;
+		goto out;
 	}
 
 	if (!dbus_message_iter_init(message, &array)) {
-		dbus_proxy_unref(proxy);
-		return;
+		goto out;
 	}
 
 	update_properties(proxy, &array, FALSE, FALSE);
@@ -1287,7 +1283,11 @@ static void get_properties_reply_not_standard(DBusMessage *message,
 	if (client->ready && !client->standard)
 		client->ready(client, client->ready_data);
 
-	dbus_proxy_unref(proxy);
+out:
+	dbus_error_free(&error);
+	dbus_message_unref(message);
+	dbus_pending_call_unref(proxy->get_all_call);
+	proxy->get_all_call = NULL;
 }
 
 static gboolean get_properties_non_standard(GDBusClient *client)
@@ -1297,11 +1297,27 @@ static gboolean get_properties_non_standard(GDBusClient *client)
 	for (list = _dbus_list_get_first_link(&client->proxy_list); list;
 		list = _dbus_list_get_next_link(&client->proxy_list, list)) {
 		GDBusProxy *proxy;
+		DBusMessage *msg;
 
 		proxy = list->data;
-		dbus_proxy_method_call(proxy, "GetProperties",
-				NULL, get_properties_reply_not_standard,
-				proxy, NULL);
+		if (proxy->get_all_call)
+			continue;
+
+		client = proxy->client;
+		msg = dbus_message_new_method_call(client->service_name,
+					proxy->obj_path, proxy->interface, "GetProperties");
+		if (msg == NULL)
+			return FALSE;
+
+		if (dbus_send_message_with_reply(client->dbus_conn, msg,
+						&proxy->get_all_call, -1) == FALSE) {
+			dbus_message_unref(msg);
+			return FALSE;
+		}
+
+		dbus_pending_call_set_notify(proxy->get_all_call,
+					get_properties_reply_not_standard, proxy, NULL);
+		dbus_message_unref(msg);
 	}
 
 	return TRUE;
