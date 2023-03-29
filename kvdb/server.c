@@ -14,11 +14,9 @@
  * limitations under the License.
  */
 
-#include <errno.h>
 #include <fnmatch.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <sys/param.h>
 
 #include <netpacket/rpmsg.h>
 #include <sys/epoll.h>
@@ -28,37 +26,13 @@
 #include <sys/un.h>
 
 #include <kvdb.h>
-#include <unqlite.h>
 
-#define KVDB_MEM 0
-#define KVDB_PERSIST 1
-#define KVDB_COUNT 2
+#include "internal.h"
 
 #define KVFD_LOCAL 0
 #define KVFD_REMOTE 1
 #define KVFD_COUNT 2
-
 #define KVFD_MAX 8
-
-#ifndef MIN
-#define MIN(n, m) (((n) < (m)) ? (n) : (m))
-#endif
-
-/****************************************************************************
- * Database Types
- ****************************************************************************/
-
-typedef int (*kvdb_consume)(const char* key, size_t key_len,
-    const char* value, size_t val_len,
-    void* cookie);
-
-typedef struct kvdb_consume_data {
-    kvdb_consume consume;
-    void* cookie;
-    unqlite_kv_cursor* cur;
-    const char* key;
-    size_t key_len;
-} kvdb_consume_data;
 
 typedef struct kvdb_monitor {
     int fd;
@@ -69,16 +43,12 @@ typedef struct kvdb_monitor {
 
 typedef LIST_HEAD(kvdb_monitor_head, kvdb_monitor) kvdb_monitor_head;
 
-typedef struct kvdb {
+typedef struct kvdb_server {
+    struct kvdb* kvdb;
     int fd[KVFD_COUNT];
-    unqlite* db[KVDB_COUNT];
     int efd;
     kvdb_monitor_head head;
-} kvdb;
-
-/****************************************************************************
- * Database Functions
- ****************************************************************************/
+} kvdb_server;
 
 static bool kvdb_is_comment(const char* line)
 {
@@ -86,182 +56,7 @@ static bool kvdb_is_comment(const char* line)
     return line[i] == '\0' || line[i] == '#';
 }
 
-static bool kvdb_is_readonly(const char* key)
-{
-    return strncmp(key, "ro.", 3) == 0;
-}
-
-static int kvdb_get_index(const char* key)
-{
-    if (strncmp(key, "persist.", 8) == 0)
-        return KVDB_PERSIST;
-    else
-        return KVDB_MEM;
-}
-
-static int kvdb_set(unqlite* db[], const char* key, size_t key_len,
-    const char* value, size_t val_len, bool force)
-{
-    if (--key_len >= PROP_NAME_MAX)
-        return -E2BIG;
-
-    if (!key || key[key_len])
-        return -EINVAL;
-
-    if (--val_len >= PROP_VALUE_MAX)
-        return -E2BIG;
-
-    if (value[val_len])
-        return -EINVAL;
-
-    if (kvdb_is_readonly(key) && !force)
-        return -EPERM;
-
-    /* in environment variable? */
-    if (getenv(key)) {
-        int ret = setenv(key, value, 1);
-        if (ret < 0)
-            ret = -errno;
-        return ret;
-    }
-
-    /* no, then try database  */
-    int i = kvdb_get_index(key);
-    if (i < 0)
-        return i;
-
-    return unqlite_kv_store(db[i], key, ++key_len, value, ++val_len);
-}
-
-static int kvdb_get(unqlite* db[], const char* key, size_t key_len, char* value)
-{
-    if (--key_len >= PROP_NAME_MAX)
-        return -E2BIG;
-
-    if (key[key_len])
-        return -EINVAL;
-
-    /* in environment variable? */
-    const char* env = getenv(key);
-    if (env) {
-        size_t len = strlen(env) + 1;
-        if (len > PROP_VALUE_MAX)
-            return -E2BIG;
-
-        if (value)
-            memcpy(value, env, len);
-
-        return len;
-    }
-
-    /* no, then try database  */
-    int i = kvdb_get_index(key);
-    if (i < 0)
-        return i;
-
-    unqlite_int64 val_len = value ? PROP_VALUE_MAX : 0;
-    int ret = unqlite_kv_fetch(db[i], key, ++key_len, value, &val_len);
-    if (ret < 0)
-        return ret;
-
-    if ((val_len <= 0) || (value && value[val_len - 1]))
-        return -EINVAL;
-
-    return val_len;
-}
-
-static int kvdb_delete(unqlite* db[], const char* key, size_t key_len)
-{
-    if (--key_len >= PROP_NAME_MAX)
-        return -E2BIG;
-
-    if (key[key_len])
-        return -EINVAL;
-
-    if (kvdb_is_readonly(key))
-        return -EPERM;
-
-    /* in environment variable? */
-    if (getenv(key)) {
-        int ret = unsetenv(key);
-        if (ret < 0)
-            ret = -errno;
-        return ret;
-    }
-
-    /* no, then try database  */
-    int i = kvdb_get_index(key);
-    if (i < 0)
-        return i;
-
-    return unqlite_kv_delete(db[i], key, ++key_len);
-}
-
-static int kvdb_list_value(const void* value, unsigned int len, void* arg)
-{
-    kvdb_consume_data* data = arg;
-    return data->consume(data->key, data->key_len, value, len, data->cookie);
-}
-
-static int kvdb_list_key(const void* value, unsigned int len, void* arg)
-{
-    kvdb_consume_data* data = arg;
-    data->key = value;
-    data->key_len = len;
-    return unqlite_kv_cursor_data_callback(data->cur, kvdb_list_value, data);
-}
-
-static int kvdb_list(unqlite* db[], kvdb_consume consume, void* cookie)
-{
-    for (int i = 0; i < KVDB_COUNT; i++) {
-        unqlite_kv_cursor* cur = NULL;
-        unqlite_kv_cursor_init(db[i], &cur);
-
-        kvdb_consume_data data = {
-            .consume = consume,
-            .cookie = cookie,
-            .cur = cur,
-        };
-
-        unqlite_kv_cursor_first_entry(cur);
-        while (unqlite_kv_cursor_valid_entry(cur)) {
-            int ret = unqlite_kv_cursor_key_callback(cur, kvdb_list_key, &data);
-            if (ret < 0) { /* exit loop demanded by consume */
-                unqlite_kv_cursor_release(db[i], cur);
-                return ret;
-            }
-            unqlite_kv_cursor_next_entry(cur);
-        }
-        unqlite_kv_cursor_release(db[i], cur);
-    }
-
-    return 0;
-}
-
-static int kvdb_commit(unqlite* db[])
-{
-    int ret = 0;
-
-    for (int i = 0; i < KVDB_COUNT; i++) {
-        int r = unqlite_commit(db[i]);
-        if (r < 0 && ret == 0)
-            ret = r;
-    }
-
-    return ret;
-}
-
-static void kvdb_uninit(unqlite* db[])
-{
-    for (int i = 0; i < KVDB_COUNT; i++) {
-        if (db[i]) {
-            unqlite_close(db[i]);
-            db[i] = NULL;
-        }
-    }
-}
-
-static int kvdb_load(unqlite* db[], bool force)
+static int kvdb_load(struct kvdb* kvdb, bool force)
 {
     const char* src = CONFIG_KVDB_SOURCE_PATH;
     char tmpb[PATH_MAX];
@@ -293,26 +88,25 @@ static int kvdb_load(unqlite* db[], bool force)
             if (!key || !value)
                 continue;
 
-            int i = kvdb_get_index(key);
-            if (i < 0)
-                continue;
-
             size_t key_len = strlen(key) + 1;
-            if (!force && kvdb_get(db, key, key_len, NULL) >= 0)
+            if (!force && kvdb_get(kvdb, key, key_len, NULL) >= 0)
                 continue;
 
-            kvdb_set(db, key, key_len, value, strlen(value) + 1, true);
+            kvdb_set(kvdb, key, key_len, value, strlen(value) + 1, true);
         }
 
         fclose(f);
     }
+
+    kvdb_commit(kvdb);
+
     return 0;
 }
 
 /* Open a monitor channel, add the [key, fd] pair to the monitor list and
  * add the pollfd to the pollfd array.
  */
-static int kvdb_monitor_open(kvdb* kv, int fd, const char* key,
+static int kvdb_monitor_open(kvdb_server* server, int fd, const char* key,
     size_t key_len)
 {
     /* Malloc monitor element to store [key, fd] pair */
@@ -326,7 +120,7 @@ static int kvdb_monitor_open(kvdb* kv, int fd, const char* key,
         .data.ptr = &mon->fd,
         .events = EPOLLIN
     };
-    int ret = epoll_ctl(kv->efd, EPOLL_CTL_ADD, fd, &ev);
+    int ret = epoll_ctl(server->efd, EPOLL_CTL_ADD, fd, &ev);
     if (ret < 0) {
         free(mon);
         return ret;
@@ -335,7 +129,7 @@ static int kvdb_monitor_open(kvdb* kv, int fd, const char* key,
     /* Add the [key, fd] pair to the monitor list */
     mon->fd = fd;
     strcpy(mon->key, key);
-    LIST_INSERT_HEAD(&kv->head, mon, entry);
+    LIST_INSERT_HEAD(&server->head, mon, entry);
 
     return 0;
 }
@@ -343,12 +137,12 @@ static int kvdb_monitor_open(kvdb* kv, int fd, const char* key,
 /* Close the monitor fd, remove the fd from the monitor list and empty
  * corresponding pollfd.
  */
-static void kvdb_monitor_close(kvdb* kv, struct epoll_event* ev)
+static void kvdb_monitor_close(kvdb_server* server, struct epoll_event* ev)
 {
     kvdb_monitor* mon = (kvdb_monitor*)ev->data.ptr;
 
     /* Close the monitor fd and delete it from epoll */
-    epoll_ctl(kv->efd, EPOLL_CTL_DEL, mon->fd, NULL);
+    epoll_ctl(server->efd, EPOLL_CTL_DEL, mon->fd, NULL);
     close(mon->fd);
 
     /* Remove the element from the monitor list */
@@ -357,7 +151,7 @@ static void kvdb_monitor_close(kvdb* kv, struct epoll_event* ev)
 }
 
 /* Notify the client the value changed (updated or deleted) */
-static void kvdb_monitor_notify(kvdb* kv, const char* key, const char* value)
+static void kvdb_monitor_notify(kvdb_server* server, const char* key, const char* value)
 {
     size_t key_len = strlen(key) + 1;
 
@@ -388,7 +182,7 @@ static void kvdb_monitor_notify(kvdb* kv, const char* key, const char* value)
 
     kvdb_monitor* mon;
     kvdb_monitor* tmp;
-    LIST_FOREACH_SAFE(mon, &kv->head, entry, tmp)
+    LIST_FOREACH_SAFE(mon, &server->head, entry, tmp)
     {
         if (fnmatch(mon->key, key, FNM_NOESCAPE) != 0)
             continue;
@@ -396,42 +190,11 @@ static void kvdb_monitor_notify(kvdb* kv, const char* key, const char* value)
         if (sendmsg(mon->fd, &msg, 0) < 0) {
             /* Client close or some error happends, stop monitor */
             LIST_REMOVE(mon, entry);
-            epoll_ctl(kv->efd, EPOLL_CTL_DEL, mon->fd, NULL);
+            epoll_ctl(server->efd, EPOLL_CTL_DEL, mon->fd, NULL);
             close(mon->fd);
             free(mon);
         }
     }
-}
-
-static int kvdb_init(unqlite* db[])
-{
-    static const char* path[KVDB_COUNT] = {
-        [KVDB_MEM] = "",
-        [KVDB_PERSIST] = CONFIG_KVDB_PERSIST_PATH,
-    };
-
-    int ret = 0;
-
-    /* open database */
-    memset(db, 0, sizeof(*db) * KVDB_COUNT);
-    for (int i = 0; i < KVDB_COUNT; i++) {
-        if (path[i][0])
-            ret = unqlite_open(&db[i], path[i], UNQLITE_OPEN_CREATE | UNQLITE_OPEN_OMIT_JOURNALING);
-        else
-            ret = unqlite_open(&db[i], NULL, UNQLITE_OPEN_IN_MEMORY);
-
-        if (ret < 0)
-            goto out;
-    }
-
-    /* load initial value from text file */
-    kvdb_load(db, false);
-    kvdb_commit(db);
-    return 0;
-
-out:
-    kvdb_uninit(db);
-    return ret;
 }
 
 /****************************************************************************
@@ -529,7 +292,7 @@ static ssize_t kvdb_recv(int sockfd, char* buf, size_t offset, size_t len)
     return len;
 }
 
-static bool kvdb_client(kvdb* kv, int fd)
+static bool kvdb_client(kvdb_server* server, int fd)
 {
     bool dirty = false;
     ssize_t len;
@@ -560,10 +323,10 @@ static bool kvdb_client(kvdb* kv, int fd)
         const char* key = msg + 2;
         len = kvdb_recv(fd, msg, len, end_pos);
         if (len > 0) {
-            int32_t err = kvdb_delete(kv->db, key, key_len);
+            int32_t err = kvdb_delete(server->kvdb, key, key_len);
             if (err >= 0) {
                 dirty = true;
-                kvdb_monitor_notify(kv, key, NULL);
+                kvdb_monitor_notify(server, key, NULL);
             }
             send(fd, &err, 4, 0);
         }
@@ -579,7 +342,7 @@ static bool kvdb_client(kvdb* kv, int fd)
         char value[PROP_VALUE_MAX];
         len = kvdb_recv(fd, msg, len, end_pos);
         if (len > 0) {
-            len = kvdb_get(kv->db, key, key_len, value);
+            len = kvdb_get(server->kvdb, key, key_len, value);
             if (len > 0)
                 send(fd, value, len, 0);
         }
@@ -596,26 +359,26 @@ static bool kvdb_client(kvdb* kv, int fd)
         const char* value = key + key_len;
         len = kvdb_recv(fd, msg, len, end_pos);
         if (len > 0) {
-            int32_t err = kvdb_set(kv->db, key, key_len, value, val_len, false);
+            int32_t err = kvdb_set(server->kvdb, key, key_len, value, val_len, false);
             if (err >= 0) {
                 dirty = true;
-                kvdb_monitor_notify(kv, key, value);
+                kvdb_monitor_notify(server, key, value);
             }
             send(fd, &err, 4, 0);
         }
         break;
     }
     case 'L': {
-        kvdb_list(kv->db, kvdb_list_consume, (void*)(uintptr_t)fd);
+        kvdb_list(server->kvdb, kvdb_list_consume, (void*)(uintptr_t)fd);
         send(fd, "\0", 2, 0); /* terminator */
         break;
     }
     case 'C': {
-        kvdb_commit(kv->db);
+        kvdb_commit(server->kvdb);
         break;
     }
     case 'R': {
-        kvdb_load(kv->db, true);
+        kvdb_load(server->kvdb, true);
         break;
     }
     case 'M': {
@@ -631,7 +394,7 @@ static bool kvdb_client(kvdb* kv, int fd)
             break;
         }
         if (len > 0) {
-            int32_t err = kvdb_monitor_open(kv, fd, key, key_len);
+            int32_t err = kvdb_monitor_open(server, fd, key, key_len);
             send(fd, &err, 4, 0);
         }
         /* Direct return, not close the monitor fd */
@@ -644,21 +407,21 @@ out:
     return dirty;
 }
 
-static void kvdb_server(kvdb* kv)
+static void kvdb_loop(kvdb_server* server)
 {
     struct epoll_event evs[KVFD_MAX];
     struct timespec ts;
 
-    kv->efd = epoll_create(KVFD_MAX);
-    if (kv->efd < 0)
+    server->efd = epoll_create(KVFD_MAX);
+    if (server->efd < 0)
         return;
 
     for (int i = 0; i < KVFD_COUNT; i++) {
-        if (kv->fd[i] > 0) {
-            evs[0].data.ptr = &kv->fd[i];
+        if (server->fd[i] > 0) {
+            evs[0].data.ptr = &server->fd[i];
             evs[0].events = EPOLLIN;
-            if (epoll_ctl(kv->efd, EPOLL_CTL_ADD, kv->fd[i], &evs[0]) < 0) {
-                close(kv->efd);
+            if (epoll_ctl(server->efd, EPOLL_CTL_ADD, server->fd[i], &evs[0]) < 0) {
+                close(server->efd);
                 return;
             }
         }
@@ -674,19 +437,19 @@ static void kvdb_server(kvdb* kv)
             clock_gettime(CLOCK_MONOTONIC, &ts);
             timeout = (int)(next - ts.tv_sec);
             if (timeout <= 0) {
-                kvdb_commit(kv->db);
+                kvdb_commit(server->kvdb);
                 timeout = -1;
                 next = 0;
             } else
                 timeout *= 1000;
         }
 
-        int nfds = epoll_wait(kv->efd, evs, KVFD_MAX, timeout);
+        int nfds = epoll_wait(server->efd, evs, KVFD_MAX, timeout);
         for (int i = 0; i < nfds; i++) {
             int fd = *(int*)evs[i].data.ptr;
-            if (fd != kv->fd[0] && fd != kv->fd[1]) {
+            if (fd != server->fd[0] && fd != server->fd[1]) {
                 if ((evs[i].events & EPOLLHUP) != 0) {
-                    kvdb_monitor_close(kv, &evs[i]);
+                    kvdb_monitor_close(server, &evs[i]);
                 }
                 continue;
             }
@@ -699,7 +462,7 @@ static void kvdb_server(kvdb* kv)
                 continue;
 
             /* is database changed? */
-            if (kvdb_client(kv, newfd) && next == 0) {
+            if (kvdb_client(server, newfd) && next == 0) {
                 clock_gettime(CLOCK_MONOTONIC, &ts);
                 next = ts.tv_sec + CONFIG_KVDB_COMMIT_INTERVAL;
                 if (next == 0)
@@ -726,21 +489,23 @@ int main(int argc, char* argv[])
 {
     UNUSED(argc);
     UNUSED(argv);
-    kvdb kv = {
+    kvdb_server server = {
         .head = LIST_HEAD_INITIALIZER(),
     };
-    int ret = kvdb_bind(kv.fd);
+    int ret = kvdb_bind(server.fd);
     if (ret < 0)
         goto out;
 
-    ret = kvdb_init(kv.db);
+    ret = kvdb_init(&server.kvdb);
     if (ret < 0)
         goto out;
+    /* load initial value from text file */
+    kvdb_load(server.kvdb, false);
 
-    kvdb_server(&kv);
-    kvdb_uninit(kv.db);
+    kvdb_loop(&server);
+    kvdb_uninit(server.kvdb);
 
 out:
-    kvdb_unbind(kv.fd);
+    kvdb_unbind(server.fd);
     return -ret;
 }
