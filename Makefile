@@ -52,4 +52,6 @@ ifneq ($(NOEXPORTSRCS),)
 BIN := $(APPDIR)/staging/libframework.a
 endif
 
+EXPORT_FILES := gdbus/gdbus.h include
+
 include $(APPDIR)/Application.mk
