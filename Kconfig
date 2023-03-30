@@ -42,6 +42,24 @@ config KVDB_TIMEOUT_INTERVAL
 	int "transaction timeout interval(sec)"
 	default 0
 
+choice
+	prompt "KVDB log level"
+	default KVDB_LOG_LEVEL_SLIENT
+
+config KVDB_LOG_LEVEL_INFO
+	bool "KVDB_LOG_LEVEL_INFO"
+
+config KVDB_LOG_LEVEL_WARN
+	bool "KVDB_LOG_LEVEL_WARN"
+
+config KVDB_LOG_LEVEL_ERR
+	bool "KVDB_LOG_LEVEL_ERR"
+
+config KVDB_LOG_LEVEL_SLIENT
+	bool "KVDB_LOG_LEVEL_SLIENT"
+
+endchoice
+
 if KVDB_SERVER
 
 config KVDB_COMMIT_INTERVAL
