@@ -16,7 +16,7 @@
 
 include $(APPDIR)/Make.defs
 
-CSRCS += log/log_write.c log/set_abort_message.c
+CSRCS += log/log_write.c log/set_abort_message.c trace/trace.c
 
 ifneq ($(CONFIG_LIB_DBUS),)
 CSRCS  += $(wildcard gdbus/*.c)
