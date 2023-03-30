@@ -96,13 +96,13 @@ extern "C" {
  * This function should not be explicitly called, the first call to any normal
  * trace function will cause it to be run safely.
  */
-void atrace_setup();
+void atrace_setup(void);
 
 /**
  * If tracing is ready, set atrace_enabled_tags to the system property
  * debug.atrace.tags.enableflags. Can be used as a sysprop change callback.
  */
-void atrace_update_tags();
+void atrace_update_tags(void);
 
 /**
  * Set whether tracing is enabled for the current process.  This is used to
@@ -138,8 +138,8 @@ extern int atrace_marker_fd;
 #define ATRACE_INIT() atrace_init()
 #define ATRACE_GET_ENABLED_TAGS() atrace_get_enabled_tags()
 
-void atrace_init();
-uint64_t atrace_get_enabled_tags();
+void atrace_init(void);
+uint64_t atrace_get_enabled_tags(void);
 
 /**
  * Test if a given tag is currently enabled.
@@ -173,7 +173,7 @@ static inline void atrace_begin(uint64_t tag, const char* name)
 static inline void atrace_end(uint64_t tag)
 {
     if (CC_UNLIKELY(atrace_is_tag_enabled(tag))) {
-        void atrace_end_body();
+        void atrace_end_body(void);
         atrace_end_body();
     }
 }
