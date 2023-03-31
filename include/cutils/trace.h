@@ -18,7 +18,6 @@
 #define _LIBS_CUTILS_TRACE_H
 
 #include <inttypes.h>
-#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -108,13 +107,6 @@ void atrace_update_tags(void);
  * prevent tracing within the Zygote process.
  */
 void atrace_set_tracing_enabled(bool enabled);
-
-/**
- * This is always set to false. This forces code that uses an old version
- * of this header to always call into atrace_setup, in which we call
- * atrace_init unconditionally.
- */
-extern atomic_bool atrace_is_ready;
 
 /**
  * Set of ATRACE_TAG flags to trace for, initialized to ATRACE_TAG_NOT_READY.
