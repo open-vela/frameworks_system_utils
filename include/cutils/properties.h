@@ -19,11 +19,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#if __has_include(<sys/system_properties.h>)
 #include <sys/system_properties.h>
-#else
-#define PROP_VALUE_MAX 92
-#endif
 
 #ifdef __cplusplus
 extern "C" {
