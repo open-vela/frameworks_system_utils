@@ -14,6 +14,12 @@
 # limitations under the License.
 #
 
+config ATRACE
+	bool "Android Trace"
+	default n
+	---help---
+		Enable Android Trace.
+
 config KVDB
 	tristate "key-value database"
 	default n
