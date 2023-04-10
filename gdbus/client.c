@@ -458,7 +458,8 @@ static void get_all_properties_reply(DBusPendingCall *call, void *user_data)
 	update_properties(proxy, &iter, FALSE, TRUE);
 
 done:
-	proxy_added(client, proxy);
+	if (_dbus_hash_table_get_n_entries(proxy->prop_list) != 0)
+		proxy_added(client, proxy);
 
 	dbus_message_unref(reply);
 
@@ -1229,7 +1230,8 @@ static void parse_properties(GDBusClient *client, const char *path,
 
 	update_properties(proxy, iter, FALSE, TRUE);
 
-	proxy_added(client, proxy);
+	if (_dbus_hash_table_get_n_entries(proxy->prop_list) != 0)
+		proxy_added(client, proxy);
 }
 
 static void parse_interfaces(GDBusClient *client, const char *path,
@@ -1280,10 +1282,12 @@ static void get_properties_reply_not_standard(DBusPendingCall *call, void *user_
 
 	update_properties(proxy, &array, FALSE, FALSE);
 
-	if (client->ready && !client->standard)
+out:
+	proxy_added(client, proxy);
+
+	if (proxy == _dbus_list_get_last(&client->proxy_list) && client->ready && !client->standard)
 		client->ready(client, client->ready_data);
 
-out:
 	dbus_error_free(&error);
 	dbus_message_unref(message);
 	dbus_pending_call_unref(proxy->get_all_call);
