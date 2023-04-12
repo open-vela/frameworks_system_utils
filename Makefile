@@ -46,10 +46,12 @@ MAINSRC  += kvdb/server.c
 PROGNAME += kvdbd
 endif # CONFIG_KVDB_SERVER
 
-ifneq ($(CONFIG_KVDB_DIRECT)$(CONFIG_KVDB_SERVER),)
+ifneq ($(CONFIG_KVDB_NVS),)
+CSRCS += kvdb/nvs.c
+else ifneq ($(CONFIG_KVDB_UNQLITE),)
 CFLAGS += ${INCDIR_PREFIX}$(APPDIR)/external/unqlite/unqlite
-CSRCS  += kvdb/unqlite.c
-endif
+CSRCS += kvdb/unqlite.c
+endif # CONFIG_KVDB_NVS
 
 PRIORITY  = $(CONFIG_KVDB_PRIORITY)
 STACKSIZE = $(CONFIG_KVDB_STACKSIZE)

@@ -23,7 +23,6 @@ config ATRACE
 config KVDB
 	tristate "key-value database"
 	default n
-	select UNQLITE
 
 if KVDB
 
@@ -81,6 +80,27 @@ config KVDB_COMMIT_INTERVAL
 
 if KVDB_DIRECT || KVDB_SERVER
 
+config KVDB_SOURCE_PATH
+	string "database default value source path"
+	default "/etc/build.prop"
+
+choice
+	prompt "the storage method of Key-value"
+	default KVDB_UNQLITE
+
+config KVDB_UNQLITE
+	bool "UNQLITE"
+	depends on UNQLITE
+
+config KVDB_NVS
+	bool "NVS"
+	select MTD_CONFIG_NAMED
+	depends on MTD_CONFIG_FAIL_SAFE
+
+endchoice
+
+if KVDB_UNQLITE
+
 config KVDB_PERSIST_PATH
 	string "persistent database path"
 	default "/data/persist.db"
@@ -89,9 +109,20 @@ config KVDB_TEMPORARY_PATH
 	string "non-persistent database path"
 	default "/tmp/temporary.db"
 
-config KVDB_SOURCE_PATH
-	string "database default value source path"
-	default "/etc/build.prop"
+endif # !KVDB_UNQLITE
+
+
+if KVDB_NVS
+
+config KVDB_NVS_FLASH_PATH
+	string "persistent mtd device path"
+	default "/dev/config"
+
+config KVDB_NVS_RAM_PATH
+	string "temporary ram device path"
+	default "/dev/config_ram"
+
+endif # !KVDB_NVS
 
 endif # KVDB_DIRECT || KVDB_SERVER
 
