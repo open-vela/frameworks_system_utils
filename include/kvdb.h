@@ -18,31 +18,8 @@
 #define __KVDB_H
 
 #include <cutils/properties.h>
-#include <syslog.h>
-
-#define KVLOG(level, fmt, ...) \
-    syslog(level, "[kvdb] [%s:%d] " fmt, __FUNCTION__, __LINE__, ##__VA_ARGS__)
-
-#if defined(CONFIG_KVDB_LOG_LEVEL_INFO)
-#define KVINFO(fmt, ...) KVLOG(LOG_INFO, fmt, ##__VA_ARGS__)
-#define KVWARN(fmt, ...) KVLOG(LOG_WARNING, fmt, ##__VA_ARGS__)
-#define KVERR(fmt, ...) KVLOG(LOG_ERR, fmt, ##__VA_ARGS__)
-#elif defined(CONFIG_KVDB_LOG_LEVEL_WARN)
-#define KVINFO(fmt, ...)
-#define KVWARN(fmt, ...) KVLOG(LOG_WARNING, fmt, ##__VA_ARGS__)
-#define KVERR(fmt, ...) KVLOG(LOG_ERR, fmt, ##__VA_ARGS__)
-#elif defined(CONFIG_KVDB_LOG_LEVEL_ERR)
-#define KVINFO(fmt, ...)
-#define KVWARN(fmt, ...)
-#define KVERR(fmt, ...) KVLOG(LOG_ERR, fmt, ##__VA_ARGS__)
-#else
-#define KVINFO(fmt, ...)
-#define KVWARN(fmt, ...)
-#define KVERR(fmt, ...)
-#endif
 
 #define PROP_MSG_MAX (3 + PROP_NAME_MAX + PROP_VALUE_MAX) /* +3 = +1(opcode) +2(len) */
-#define PROP_SERVER_PATH "kvdbd"
 
 #if defined(__cplusplus)
 extern "C" {

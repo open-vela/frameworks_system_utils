@@ -1,27 +1,47 @@
-/****************************************************************************
- * internal.h
+/*
+ * Copyright (C) 2023 Xiaomi Corporation
  *
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.  The
- * ASF licenses this file to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance with the
- * License.  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
- * License for the specific language governing permissions and limitations
- * under the License.
- *
- ****************************************************************************/
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 #ifndef __INTERNAL_H
 #define __INTERNAL_H
 
 #include <stddef.h>
+#include <syslog.h>
+
+#define KVLOG(level, fmt, ...) \
+    syslog(level, "[kvdb] [%s:%d] " fmt, __FUNCTION__, __LINE__, ##__VA_ARGS__)
+
+#if defined(CONFIG_KVDB_LOG_LEVEL_INFO)
+#define KVINFO(fmt, ...) KVLOG(LOG_INFO, fmt, ##__VA_ARGS__)
+#define KVWARN(fmt, ...) KVLOG(LOG_WARNING, fmt, ##__VA_ARGS__)
+#define KVERR(fmt, ...) KVLOG(LOG_ERR, fmt, ##__VA_ARGS__)
+#elif defined(CONFIG_KVDB_LOG_LEVEL_WARN)
+#define KVINFO(fmt, ...)
+#define KVWARN(fmt, ...) KVLOG(LOG_WARNING, fmt, ##__VA_ARGS__)
+#define KVERR(fmt, ...) KVLOG(LOG_ERR, fmt, ##__VA_ARGS__)
+#elif defined(CONFIG_KVDB_LOG_LEVEL_ERR)
+#define KVINFO(fmt, ...)
+#define KVWARN(fmt, ...)
+#define KVERR(fmt, ...) KVLOG(LOG_ERR, fmt, ##__VA_ARGS__)
+#else
+#define KVINFO(fmt, ...)
+#define KVWARN(fmt, ...)
+#define KVERR(fmt, ...)
+#endif
+
+#define PROP_SERVER_PATH "kvdbd"
 
 #if defined(__cplusplus)
 extern "C" {
