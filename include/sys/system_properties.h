@@ -86,6 +86,10 @@ bool __system_property_wait(const prop_info* __pi, uint32_t __old_serial, uint32
 
 /* Deprecated. In Android O and above, there's no limit on property name length. */
 #define PROP_NAME_MAX   127
+/* Deprecated. Use __system_property_read_callback instead. */
+int __system_property_read(const prop_info* __pi, char* __name, char* __value);
+/* Deprecated. Use __system_property_read_callback instead. */
+int __system_property_get(const char* __name, char* __value);
 
 #if defined(__cplusplus)
 }

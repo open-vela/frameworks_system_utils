@@ -127,3 +127,14 @@ bool __system_property_wait(const prop_info* __pi, uint32_t __old_serial, uint32
 
     return false;
 }
+
+int __system_property_read(const prop_info* __pi, char* __name, char* __value)
+{
+    strlcpy(__name, (const char*)__pi, PROP_NAME_MAX);
+    return property_get(__name, __value, NULL);
+}
+
+int __system_property_get(const char* __name, char* __value)
+{
+    return property_get(__name, __value, NULL);
+}
