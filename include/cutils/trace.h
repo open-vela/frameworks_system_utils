@@ -109,6 +109,13 @@ void atrace_update_tags(void);
 void atrace_set_tracing_enabled(bool enabled);
 
 /**
+ * This is always set to false. This forces code that uses an old version
+ * of this header to always call into atrace_setup, in which we call
+ * atrace_init unconditionally.
+ */
+extern bool atrace_is_ready;
+
+/**
  * Set of ATRACE_TAG flags to trace for, initialized to ATRACE_TAG_NOT_READY.
  * A value of zero indicates setup has failed.
  * Any other nonzero value indicates setup has succeeded, and tracing is on.
