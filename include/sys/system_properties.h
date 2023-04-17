@@ -29,12 +29,13 @@
 #ifndef _INCLUDE_SYS_SYSTEM_PROPERTIES_H
 #define _INCLUDE_SYS_SYSTEM_PROPERTIES_H
 
-#include <sys/cdefs.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
-__BEGIN_DECLS
+#if defined(__cplusplus)
+extern "C" {
+#endif
 
 typedef struct prop_info prop_info;
 
@@ -81,12 +82,13 @@ int __system_property_foreach(void (*__callback)(const prop_info* __pi, void* __
  * timed out.
  */
 struct timespec;
-bool __system_property_wait(const prop_info* __pi, uint32_t __old_serial, uint32_t* __new_serial_ptr,
-                            const struct timespec* __relative_timeout);
+bool __system_property_wait(const prop_info* __pi, uint32_t __old_serial, uint32_t* __new_serial_ptr, const struct timespec* __relative_timeout);
 
 /* Deprecated. In Android O and above, there's no limit on property name length. */
 #define PROP_NAME_MAX   127
 
-__END_DECLS
+#if defined(__cplusplus)
+}
+#endif
 
 #endif
