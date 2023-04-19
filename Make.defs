@@ -15,5 +15,5 @@
 #
 
 CONFIGURED_APPS += $(APPDIR)/frameworks/utils
-CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/frameworks/utils/include}
-CXXFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/frameworks/utils/include}
+CFLAGS += ${INCDIR_PREFIX}$(APPDIR)/frameworks/utils/include
+CXXFLAGS += ${INCDIR_PREFIX}$(APPDIR)/frameworks/utils/include
