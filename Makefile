@@ -26,9 +26,9 @@ endif
 ifneq ($(CONFIG_LIB_DBUS),)
 CSRCS  += $(wildcard gdbus/*.c)
 CFLAGS += -DDBUS_COMPILATION -DVERSION="1.15.1"
-CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/dbus/dbus}
-CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/glib/glib/glib}
-CFLAGS += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/glib/glib/}
+CFLAGS += ${INCDIR_PREFIX}$(APPDIR)/external/dbus/dbus
+CFLAGS += ${INCDIR_PREFIX}$(APPDIR)/external/glib/glib/glib
+CFLAGS += ${INCDIR_PREFIX}$(APPDIR)/external/glib/glib/
 endif # CONFIG_LIB_DBUS
 
 ifneq ($(CONFIG_KVDB),)
@@ -38,7 +38,7 @@ PROGNAME  += setprop getprop
 endif # CONFIG_KVDB
 
 ifneq ($(CONFIG_KVDB_SERVER),)
-CFLAGS    += ${shell $(INCDIR) $(INCDIROPT) "$(CC)" $(APPDIR)/external/unqlite/unqlite}
+CFLAGS    += ${INCDIR_PREFIX}$(APPDIR)/external/unqlite/unqlite
 CSRCS     += kvdb/unqlite.c
 MAINSRC   += kvdb/server.c
 PROGNAME  += kvdbd
