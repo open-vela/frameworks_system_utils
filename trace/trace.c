@@ -22,7 +22,6 @@
 #include <nuttx/sched_note.h>
 
 int atrace_marker_fd = -1;
-bool atrace_is_ready = true;
 uint64_t atrace_enabled_tags = ~0ull;
 
 /****************************************************************************
