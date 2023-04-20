@@ -57,6 +57,12 @@ config KVDB_SERVER
 	bool "KVDB server"
 	default n
 
+config KVDB_DIRECT
+	bool "Access KVDB directly"
+	depends on !KVDB_SERVER
+
+if !KVDB_DIRECT
+
 config KVDB_SERVER_CPUNAME
 	string "which cpu kvdb server runs on"
 	depends on !KVDB_SERVER
@@ -66,20 +72,27 @@ config KVDB_TIMEOUT_INTERVAL
 	int "transaction timeout interval(sec)"
 	default 0
 
-if KVDB_SERVER
+endif
 
 config KVDB_COMMIT_INTERVAL
 	int "commit time interval(sec)"
+	depends on KVDB_SERVER
 	default 5
+
+if KVDB_DIRECT || KVDB_SERVER
 
 config KVDB_PERSIST_PATH
 	string "persistent database path"
 	default "/data/persist.db"
 
+config KVDB_TEMPORARY_PATH
+	string "non-persistent database path"
+	default "/tmp/temporary.db"
+
 config KVDB_SOURCE_PATH
 	string "database default value source path"
 	default "/etc/build.prop"
 
-endif # !KVDB_SERVER
+endif # KVDB_DIRECT || KVDB_SERVER
 
 endif # KVDB

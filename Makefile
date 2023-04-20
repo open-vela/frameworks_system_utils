@@ -32,21 +32,29 @@ CFLAGS += ${INCDIR_PREFIX}$(APPDIR)/external/glib/glib/
 endif # CONFIG_LIB_DBUS
 
 ifneq ($(CONFIG_KVDB),)
-CSRCS     += kvdb/client.c kvdb/system_properties.c
-MAINSRC   += kvdb/setprop.c kvdb/getprop.c
-PROGNAME  += setprop getprop
-endif # CONFIG_KVDB
+ifneq ($(CONFIG_KVDB_DIRECT),)
+CSRCS += kvdb/direct.c
+else
+CSRCS += kvdb/client.c
+endif # CONFIG_KVDB_DIRECT
+CSRCS += kvdb/common.c kvdb/system_properties.c
+MAINSRC  += kvdb/setprop.c kvdb/getprop.c
+PROGNAME += setprop getprop
 
 ifneq ($(CONFIG_KVDB_SERVER),)
-CFLAGS    += ${INCDIR_PREFIX}$(APPDIR)/external/unqlite/unqlite
-CSRCS     += kvdb/unqlite.c
-MAINSRC   += kvdb/server.c
-PROGNAME  += kvdbd
+MAINSRC  += kvdb/server.c
+PROGNAME += kvdbd
 endif # CONFIG_KVDB_SERVER
+
+ifneq ($(CONFIG_KVDB_DIRECT)$(CONFIG_KVDB_SERVER),)
+CFLAGS += ${INCDIR_PREFIX}$(APPDIR)/external/unqlite/unqlite
+CSRCS  += kvdb/unqlite.c
+endif
 
 PRIORITY  = $(CONFIG_KVDB_PRIORITY)
 STACKSIZE = $(CONFIG_KVDB_STACKSIZE)
 MODULE    = $(CONFIG_KVDB)
+endif # CONFIG_KVDB
 
 ASRCS := $(wildcard $(ASRCS))
 CSRCS := $(wildcard $(CSRCS))

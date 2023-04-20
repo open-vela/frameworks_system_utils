@@ -56,8 +56,11 @@ int kvdb_get(struct kvdb* kvdb, const char* key, size_t key_len, char* value);
 int kvdb_delete(struct kvdb* kvdb, const char* key, size_t key_len);
 int kvdb_list(struct kvdb* kvdb, kvdb_consume consume, void* cookie);
 int kvdb_commit(struct kvdb* kvdb);
+int kvdb_load(struct kvdb* kvdb, const char* src, bool force);
 int kvdb_init(struct kvdb** kvdb);
 void kvdb_uninit(struct kvdb* kvdb);
+
+int property_set_(const char* key, const char* value, bool oneway);
 
 #if defined(__cplusplus)
 }

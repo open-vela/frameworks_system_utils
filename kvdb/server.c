@@ -50,59 +50,6 @@ typedef struct kvdb_server {
     kvdb_monitor_head head;
 } kvdb_server;
 
-static bool kvdb_is_comment(const char* line)
-{
-    size_t i = strspn(line, " \t\r\n");
-    return line[i] == '\0' || line[i] == '#';
-}
-
-static int kvdb_load(struct kvdb* kvdb, bool force)
-{
-    const char* src = CONFIG_KVDB_SOURCE_PATH;
-    char tmpb[PATH_MAX];
-    const char* path = tmpb;
-    const char* sep;
-
-    while (*src) {
-        sep = strchr(src, ';');
-        if (sep) {
-            strlcpy(tmpb, src, MIN(PATH_MAX, sep - src + 1));
-            src = sep + 1;
-        } else {
-            path = src;
-            src += strlen(src);
-        }
-
-        FILE* f = fopen(path, "r");
-        if (!f)
-            continue;
-
-        char buf[PROP_MSG_MAX];
-        while (fgets(buf, PROP_MSG_MAX, f)) {
-            if (kvdb_is_comment(buf))
-                continue;
-
-            char* tmp;
-            char* key = strtok_r(buf, "=", &tmp);
-            char* value = strtok_r(NULL, "\n", &tmp);
-            if (!key || !value)
-                continue;
-
-            size_t key_len = strlen(key) + 1;
-            if (!force && kvdb_get(kvdb, key, key_len, NULL) >= 0)
-                continue;
-
-            kvdb_set(kvdb, key, key_len, value, strlen(value) + 1, true);
-        }
-
-        fclose(f);
-    }
-
-    kvdb_commit(kvdb);
-
-    return 0;
-}
-
 /* Open a monitor channel, add the [key, fd] pair to the monitor list and
  * add the pollfd to the pollfd array.
  */
@@ -378,7 +325,7 @@ static bool kvdb_client(kvdb_server* server, int fd)
         break;
     }
     case 'R': {
-        kvdb_load(server->kvdb, true);
+        kvdb_load(server->kvdb, CONFIG_KVDB_SOURCE_PATH, true);
         break;
     }
     case 'M': {
@@ -499,8 +446,6 @@ int main(int argc, char* argv[])
     ret = kvdb_init(&server.kvdb);
     if (ret < 0)
         goto out;
-    /* load initial value from text file */
-    kvdb_load(server.kvdb, false);
 
     kvdb_loop(&server);
     kvdb_uninit(server.kvdb);
