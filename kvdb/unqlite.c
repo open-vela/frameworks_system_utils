@@ -224,7 +224,7 @@ void kvdb_uninit(struct kvdb* kvdb)
 int kvdb_init(struct kvdb** kvdb)
 {
     static const char* path[KVDB_COUNT] = {
-        [KVDB_MEM] = "",
+        [KVDB_MEM] = CONFIG_KVDB_TEMPORARY_PATH,
         [KVDB_PERSIST] = CONFIG_KVDB_PERSIST_PATH,
     };
 
@@ -244,6 +244,9 @@ int kvdb_init(struct kvdb** kvdb)
         if (ret < 0)
             goto out;
     }
+
+    /* load initial value from text file */
+    kvdb_load(*kvdb, CONFIG_KVDB_SOURCE_PATH, false);
 
     return ret;
 
