@@ -108,20 +108,22 @@ static struct ptr_array *ptr_array_sized_new(size_t size)
 	return parray;
 }
 
-static void ptr_array_add(struct ptr_array *array, void *data)
+static void ptr_array_add(struct ptr_array **array, void *data)
 {
 	struct ptr_array *tmp;
 
-	if (array->len >= array->alloc_len) {
-		tmp = realloc(array, sizeof(*tmp) + array->alloc_len * 2 * sizeof(void *));
+	if ((*array)->len >= (*array)->alloc_len) {
+		tmp = realloc(*array, sizeof(*tmp) + (*array)->alloc_len *
+                                                     2 * sizeof(void *));
 		if (tmp == NULL)
 			return;
 
-		array = tmp;
-		array->alloc_len *= 2;
+		*array = tmp;
+		(*array)->alloc_len *= 2;
+                (*array)->data = (void **)(tmp + 1);
 	}
 
-	array->data[array->len++] = data;
+	(*array)->data[(*array)->len++] = data;
 }
 
 static void ptr_array_free(struct ptr_array *array)
@@ -1612,7 +1614,7 @@ GDBusClient *dbus_client_new_full(DBusConnection *connection,
 				client->service_name, client->base_path);
 	_dbus_string_copy_data(&str, &rule);
 	_dbus_string_free(&str);
-	ptr_array_add(client->match_rules, rule);
+	ptr_array_add(&client->match_rules, rule);
 
 	for (i = 0; i < client->match_rules->len; i++) {
 		modify_match(client->dbus_conn, "AddMatch",
