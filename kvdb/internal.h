@@ -23,15 +23,15 @@
 #define KVLOG(level, fmt, ...) \
     syslog(level, "[kvdb] [%s:%d] " fmt, __FUNCTION__, __LINE__, ##__VA_ARGS__)
 
-#if defined(CONFIG_KVDB_LOG_LEVEL_INFO)
+#if defined(CONFIG_KVDB_LOG_INFO)
 #define KVINFO(fmt, ...) KVLOG(LOG_INFO, fmt, ##__VA_ARGS__)
 #define KVWARN(fmt, ...) KVLOG(LOG_WARNING, fmt, ##__VA_ARGS__)
 #define KVERR(fmt, ...) KVLOG(LOG_ERR, fmt, ##__VA_ARGS__)
-#elif defined(CONFIG_KVDB_LOG_LEVEL_WARN)
+#elif defined(CONFIG_KVDB_LOG_WARN)
 #define KVINFO(fmt, ...)
 #define KVWARN(fmt, ...) KVLOG(LOG_WARNING, fmt, ##__VA_ARGS__)
 #define KVERR(fmt, ...) KVLOG(LOG_ERR, fmt, ##__VA_ARGS__)
-#elif defined(CONFIG_KVDB_LOG_LEVEL_ERR)
+#elif defined(CONFIG_KVDB_LOG_ERR)
 #define KVINFO(fmt, ...)
 #define KVWARN(fmt, ...)
 #define KVERR(fmt, ...) KVLOG(LOG_ERR, fmt, ##__VA_ARGS__)

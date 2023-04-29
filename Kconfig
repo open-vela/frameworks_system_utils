@@ -27,6 +27,24 @@ config KVDB
 
 if KVDB
 
+choice
+	prompt "KVDB log level"
+	default KVDB_LOG_SLIENT
+
+config KVDB_LOG_INFO
+	bool "KVDB_LOG_INFO"
+
+config KVDB_LOG_WARN
+	bool "KVDB_LOG_WARN"
+
+config KVDB_LOG_ERR
+	bool "KVDB_LOG_ERR"
+
+config KVDB_LOG_SLIENT
+	bool "KVDB_LOG_SLIENT"
+
+endchoice
+
 config KVDB_PRIORITY
 	int "task priority"
 	default 100
@@ -47,24 +65,6 @@ config KVDB_SERVER_CPUNAME
 config KVDB_TIMEOUT_INTERVAL
 	int "transaction timeout interval(sec)"
 	default 0
-
-choice
-	prompt "KVDB log level"
-	default KVDB_LOG_LEVEL_SLIENT
-
-config KVDB_LOG_LEVEL_INFO
-	bool "KVDB_LOG_LEVEL_INFO"
-
-config KVDB_LOG_LEVEL_WARN
-	bool "KVDB_LOG_LEVEL_WARN"
-
-config KVDB_LOG_LEVEL_ERR
-	bool "KVDB_LOG_LEVEL_ERR"
-
-config KVDB_LOG_LEVEL_SLIENT
-	bool "KVDB_LOG_LEVEL_SLIENT"
-
-endchoice
 
 if KVDB_SERVER
 
