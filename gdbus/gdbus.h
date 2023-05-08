@@ -77,6 +77,7 @@ typedef uint32_t     guint32;
 #define g_dbus_dict_append_array dbus_dict_append_array
 #define g_dbus_proxy_method_call dbus_proxy_method_call
 #define g_dbus_proxy_set_property_watch dbus_proxy_set_property_watch
+#define g_dbus_proxy_remove_property_watch dbus_proxy_remove_property_watch
 #define g_dbus_proxy_set_removed_watch dbus_proxy_set_removed_watch
 #define g_dbus_client_new dbus_client_new
 #define g_dbus_client_new_full dbus_client_new_full
@@ -439,6 +440,8 @@ typedef void (* GDBusPropertyFunction) (GDBusProxy *proxy, const char *name,
 
 gboolean dbus_proxy_set_property_watch(GDBusProxy *proxy,
 			GDBusPropertyFunction function, void *user_data);
+gboolean dbus_proxy_remove_property_watch(GDBusProxy *proxy,
+			GDBusDestroyFunction destroy);
 
 gboolean dbus_proxy_set_removed_watch(GDBusProxy *proxy,
 			GDBusProxyFunction destroy, void *user_data);

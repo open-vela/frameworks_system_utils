@@ -1185,6 +1185,20 @@ gboolean dbus_proxy_set_property_watch(GDBusProxy *proxy,
 	return TRUE;
 }
 
+gboolean dbus_proxy_remove_property_watch(GDBusProxy *proxy,
+			GDBusDestroyFunction destroy)
+{
+	if (proxy == NULL)
+		return FALSE;
+
+	proxy->prop_func = NULL;
+	if (destroy)
+		destroy(proxy->prop_data);
+	proxy->prop_data = NULL;
+
+	return TRUE;
+}
+
 gboolean dbus_proxy_set_removed_watch(GDBusProxy *proxy,
 				GDBusProxyFunction function, void *user_data)
 {
