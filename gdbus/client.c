@@ -56,6 +56,7 @@ struct GDBusClient {
 	void *signal_data;
 	GDBusProxyFunction proxy_added;
 	GDBusProxyFunction proxy_removed;
+	GDBusProxyPropertyFilterFunction proxy_property_filter;
 	GDBusClientFunction ready;
 	void *ready_data;
 	GDBusPropertyFunction property_changed;
@@ -78,6 +79,7 @@ struct GDBusProxy {
 	void *removed_data;
 	DBusPendingCall *get_all_call;
 	gboolean pending;
+	gboolean filter_first;
 };
 
 struct prop_entry {
@@ -436,6 +438,7 @@ static void proxy_added(GDBusClient *client, GDBusProxy *proxy)
 		client->proxy_added(proxy, client->user_data);
 
 	proxy->pending = FALSE;
+	proxy->filter_first = TRUE;
 }
 
 static void get_all_properties_reply(DBusPendingCall *call, void *user_data)
@@ -652,6 +655,7 @@ static GDBusProxy *proxy_new(GDBusClient *client, const char *path,
 							proxy, NULL);
 
 	proxy->pending = TRUE;
+	proxy->filter_first = FALSE;
 
 	_dbus_list_append(&client->proxy_list, proxy);
 
@@ -1310,6 +1314,12 @@ static gboolean get_properties_non_standard(GDBusClient *client)
 			continue;
 
 		client = proxy->client;
+		if (client->proxy_property_filter && client->proxy_property_filter(proxy)) {
+			if (!proxy->filter_first)
+				proxy_added(client, proxy);
+			continue;
+		}
+
 		msg = dbus_message_new_method_call(client->service_name,
 					proxy->obj_path, proxy->interface, "GetProperties");
 		if (msg == NULL)
@@ -1737,6 +1747,7 @@ gboolean dbus_client_set_ready_watch(GDBusClient *client,
 gboolean dbus_client_set_proxy_handlers(GDBusClient *client,
 					GDBusProxyFunction proxy_added_,
 					GDBusProxyFunction proxy_removed,
+					GDBusProxyPropertyFilterFunction proxy_property_filter,
 					GDBusPropertyFunction property_changed,
 					void *user_data)
 {
@@ -1745,10 +1756,11 @@ gboolean dbus_client_set_proxy_handlers(GDBusClient *client,
 
 	client->proxy_added = proxy_added_;
 	client->proxy_removed = proxy_removed;
+	client->proxy_property_filter = proxy_property_filter;
 	client->property_changed = property_changed;
 	client->user_data = user_data;
 
-	if (proxy_added_ || proxy_removed || property_changed)
+	if (proxy_added_ || proxy_removed || property_changed || proxy_property_filter)
 		get_managed_objects(client);
 
 	return TRUE;
