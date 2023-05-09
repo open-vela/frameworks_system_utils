@@ -59,6 +59,7 @@ struct GDBusClient {
 	GDBusProxyPropertyFilterFunction proxy_property_filter;
 	GDBusClientFunction ready;
 	void *ready_data;
+	gboolean ready_called;
 	GDBusPropertyFunction property_changed;
 	void *user_data;
 	DBusList *proxy_list;
@@ -1305,8 +1306,11 @@ static void get_properties_reply_not_standard(DBusPendingCall *call, void *user_
 out:
 	proxy_added(client, proxy);
 
-	if (proxy == _dbus_list_get_last(&client->proxy_list) && client->ready && !client->standard)
+	if (client->ready_called == FALSE && proxy == _dbus_list_get_last(&client->proxy_list) &&
+	    client->ready && !client->standard) {
+		client->ready_called = TRUE;
 		client->ready(client, client->ready_data);
+	}
 
 	dbus_error_free(&error);
 	dbus_message_unref(message);
