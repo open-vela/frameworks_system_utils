@@ -139,7 +139,8 @@ extern int __fake_use_va_args(int, ...);
          ((void)android_printAssert(#cond, LOG_TAG, ##__VA_ARGS__))) \
                              : ((void)0))
 #else
-#define LOG_ALWAYS_FATAL_IF(cond, ...) __FAKE_USE_VA_ARGS(__VA_ARGS__)
+#define LOG_ALWAYS_FATAL_IF(cond, ...) \
+    ((__predict_false(cond)) ? (__FAKE_USE_VA_ARGS(__VA_ARGS__)) : ((void)0))
 #endif
 #endif
 
