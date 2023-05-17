@@ -327,9 +327,6 @@ extern int __fake_use_va_args(int, ...);
 #ifndef ALOG
 #ifndef CONFIG_ALOG
 #define ALOG(priority, tag, ...) LOG_PRI(ANDROID_##priority, tag, __VA_ARGS__)
-#elif CONFIG_ALOG == 1
-#define ALOG(priority, tag, ...) \
-    ((ANDROID_##priority >= ANDROID_LOG_FATAL) ? LOG_PRI(ANDROID_##priority, tag, __VA_ARGS__) : 0)
 #elif CONFIG_ALOG == 2
 #define ALOG(priority, tag, ...) \
     ((ANDROID_##priority >= ANDROID_LOG_ERROR) ? LOG_PRI(ANDROID_##priority, tag, __VA_ARGS__) : 0)
@@ -346,7 +343,8 @@ extern int __fake_use_va_args(int, ...);
 #define ALOG(priority, tag, ...) \
     ((ANDROID_##priority >= ANDROID_LOG_VERBOSE) ? LOG_PRI(ANDROID_##priority, tag, __VA_ARGS__) : 0)
 #else
-#define ALOG(priority, tag, ...) __FAKE_USE_VA_ARGS(__VA_ARGS__)
+#define ALOG(priority, tag, ...) \
+    ((ANDROID_##priority >= ANDROID_LOG_FATAL) ? LOG_PRI(ANDROID_##priority, tag, __VA_ARGS__) : 0)
 #endif
 #endif
 
