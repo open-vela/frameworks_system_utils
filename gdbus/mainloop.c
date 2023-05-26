@@ -92,6 +92,7 @@ static inline void queue_dispatch(DBusConnection *conn,
 		handler->handle.data = handler;
 		if (uv_idle_start(&handler->handle, message_dispatch) != 0) {
 			dbus_connection_unref(conn);
+			uv_close((uv_handle_t *)&handler->handle, close_cb);
 			free(handler);
 		}
 	}
