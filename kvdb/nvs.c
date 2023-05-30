@@ -287,11 +287,14 @@ int kvdb_list(struct kvdb* kvdb, kvdb_consume consume, void* cookie)
 {
     struct config_data_s data;
     int i;
+    uint8_t buf[PROP_VALUE_MAX];
 
     if (!consume)
         return 0;
 
     for (i = 0; i < KVDB_COUNT; i++) {
+        data.configdata = buf;
+        data.len = PROP_VALUE_MAX;
         int ret = ioctl(kvdb->fd[i], CFGDIOC_FIRSTCONFIG, &data);
         if (ret < 0)
             continue;
@@ -300,6 +303,8 @@ int kvdb_list(struct kvdb* kvdb, kvdb_consume consume, void* cookie)
             (const char*)(data.configdata), data.len, cookie);
 
         while (1) {
+            data.configdata = buf;
+            data.len = PROP_VALUE_MAX;
             ret = ioctl(kvdb->fd[i], CFGDIOC_NEXTCONFIG, &data);
             if (ret < 0)
                 break;
