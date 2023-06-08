@@ -48,16 +48,35 @@ struct kvdb {
     int fd[KVDB_COUNT];
 };
 
+#define PERSIST_LABEL "persist."
+#define PERSIST_LABEL_LEN 8
+
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
 
 static int kvdb_get_index(const char* key)
 {
-    if (strncmp(key, "persist.", 8) == 0) {
+    if (strncmp(key, PERSIST_LABEL, PERSIST_LABEL_LEN) == 0) {
         return KVDB_PERSIST;
     } else {
         return KVDB_MEM;
+    }
+}
+
+static const char* kvdb_skip_prefix(const char* key, int index)
+{
+    return index == KVDB_PERSIST ? key + PERSIST_LABEL_LEN : key;
+}
+
+static void kvdb_add_prefix(char* out, size_t outlen,
+    int index, const char* in)
+{
+    if (index == KVDB_PERSIST) {
+        strlcpy(out, PERSIST_LABEL, outlen);
+        strlcat(out, in, outlen);
+    } else {
+        strlcpy(out, in, outlen);
     }
 }
 
@@ -175,16 +194,24 @@ int kvdb_set(struct kvdb* kvdb, const char* key, size_t key_len,
     const char* value, size_t val_len, bool force)
 {
     struct config_data_s data;
+    int index;
     int ret;
 
-    if (key == NULL || key_len == 0 || key_len >= sizeof(data.name))
+    if (key == NULL || key_len == 0)
+        return -EINVAL;
+
+    index = kvdb_get_index(key);
+    key = kvdb_skip_prefix(key, index);
+
+    if (strlen(key) >= sizeof(data.name))
         return -EINVAL;
 
     strlcpy(data.name, key, sizeof(data.name));
+
     data.len = val_len;
     data.configdata = (uint8_t*)value;
 
-    ret = ioctl(kvdb->fd[kvdb_get_index(key)], CFGDIOC_SETCONFIG, &data);
+    ret = ioctl(kvdb->fd[index], CFGDIOC_SETCONFIG, &data);
     if (ret < 0) {
         ret = -errno;
         KVERR("IOCTL_SETCONFIG ERROR %d", ret);
@@ -213,16 +240,23 @@ int kvdb_set(struct kvdb* kvdb, const char* key, size_t key_len,
 int kvdb_get(struct kvdb* kvdb, const char* key, size_t key_len, char* value)
 {
     struct config_data_s data;
+    int index;
     int ret;
 
-    if (key == NULL || key_len == 0 || key_len >= sizeof(data.name))
+    if (key == NULL || key_len == 0)
+        return -EINVAL;
+
+    index = kvdb_get_index(key);
+    key = kvdb_skip_prefix(key, index);
+
+    if (strlen(key) >= sizeof(data.name))
         return -EINVAL;
 
     strlcpy(data.name, key, sizeof(data.name));
     data.configdata = (uint8_t*)value;
     data.len = PROP_VALUE_MAX;
 
-    ret = ioctl(kvdb->fd[kvdb_get_index(key)], CFGDIOC_GETCONFIG, &data);
+    ret = ioctl(kvdb->fd[index], CFGDIOC_GETCONFIG, &data);
     if (ret < 0) {
         ret = -errno;
         KVERR("CFGDIOC_GETCONFIG ERROR: %d", ret);
@@ -251,14 +285,21 @@ int kvdb_get(struct kvdb* kvdb, const char* key, size_t key_len, char* value)
 int kvdb_delete(struct kvdb* kvdb, const char* key, size_t key_len)
 {
     struct config_data_s data;
+    int index;
     int ret;
 
-    if (key == NULL || key_len == 0 || key_len >= sizeof(data.name))
+    if (key == NULL || key_len == 0)
+        return -EINVAL;
+
+    index = kvdb_get_index(key);
+    key = kvdb_skip_prefix(key, index);
+
+    if (strlen(key) >= sizeof(data.name))
         return -EINVAL;
 
     strlcpy(data.name, key, sizeof(data.name));
 
-    ret = ioctl(kvdb->fd[kvdb_get_index(key)], CFGDIOC_DELCONFIG, &data);
+    ret = ioctl(kvdb->fd[index], CFGDIOC_DELCONFIG, &data);
     if (ret < 0) {
         ret = -errno;
         KVERR("CFGDIOC_DELCONFIG ERROR: %d", ret);
@@ -285,9 +326,10 @@ int kvdb_delete(struct kvdb* kvdb, const char* key, size_t key_len)
 
 int kvdb_list(struct kvdb* kvdb, kvdb_consume consume, void* cookie)
 {
+    char key[CONFIG_NAME_MAX + PERSIST_LABEL_LEN];
+    uint8_t buf[PROP_VALUE_MAX];
     struct config_data_s data;
     int i;
-    uint8_t buf[PROP_VALUE_MAX];
 
     if (!consume)
         return 0;
@@ -299,7 +341,9 @@ int kvdb_list(struct kvdb* kvdb, kvdb_consume consume, void* cookie)
         if (ret < 0)
             continue;
 
-        consume(data.name, strlen(data.name) + 1,
+        kvdb_add_prefix(key, sizeof(key), i, data.name);
+
+        consume(key, strlen(key) + 1,
             (const char*)(data.configdata), data.len, cookie);
 
         while (1) {
@@ -309,7 +353,9 @@ int kvdb_list(struct kvdb* kvdb, kvdb_consume consume, void* cookie)
             if (ret < 0)
                 break;
 
-            consume(data.name, strlen(data.name) + 1,
+            kvdb_add_prefix(key, sizeof(key), i, data.name);
+
+            consume(key, strlen(key) + 1,
                 (const char*)(data.configdata), data.len, cookie);
         }
     }
