@@ -406,6 +406,8 @@ out:
 
 int property_list(void (*propfn)(const char* key, const char* value, void* cookie), void* cookie)
 {
+    char* msg = NULL;
+
     int fd = property_connect();
     if (fd < 0) {
         KVERR("connect failed, fd=%d\n", fd);
@@ -425,6 +427,13 @@ int property_list(void (*propfn)(const char* key, const char* value, void* cooki
         goto out;
     }
 
+    msg = malloc(PROP_MSG_MAX);
+    if (msg == NULL) {
+        KVERR("malloc failed\n");
+        ret = -ENOMEM;
+        goto out;
+    }
+
     while (1) {
         /*-------------------------------------*
          |   1   |   1   | key_len |  val_len  |
@@ -432,7 +441,6 @@ int property_list(void (*propfn)(const char* key, const char* value, void* cooki
          |key_len|val_len|[key'\0']|[value'\0']|
          *-------------------------------------*/
 
-        char msg[PROP_MSG_MAX];
         ret = recv_safe(fd, msg, 0, 2);
         if (ret < 0) {
             ret = -errno;
@@ -470,6 +478,7 @@ int property_list(void (*propfn)(const char* key, const char* value, void* cooki
     }
 
 out:
+    free(msg);
     close(fd);
     return ret;
 }
@@ -623,25 +632,36 @@ out:
 
 int property_monitor_read(int fd, char* newkey, char* newvalue)
 {
-    char msg[PROP_MSG_MAX];
+    char* msg = malloc(PROP_MSG_MAX);
+    if (msg == NULL) {
+        KVERR("malloc failed\n");
+        return -ENOMEM;
+    }
+
     ssize_t ret = recv(fd, msg, 2, 0);
     if (ret < 2) {
         KVERR("recv failed, ret=%d, errno=%d\n", ret, errno);
+        free(msg);
         return ret < 0 ? -errno : -ENODATA;
     }
 
     size_t key_len = (unsigned char)msg[0];
-    if (key_len > PROP_NAME_MAX)
+    if (key_len > PROP_NAME_MAX) {
+        free(msg);
         return -E2BIG;
+    }
 
     size_t val_len = (unsigned char)msg[1];
-    if (val_len > PROP_VALUE_MAX)
+    if (val_len > PROP_VALUE_MAX) {
+        free(msg);
         return -E2BIG;
+    }
 
     size_t total = key_len + val_len + 2;
     ret = recv_safe(fd, msg, ret, total);
     if (ret < 0) {
         KVERR("recv_safe failed, ret=%d\n", ret);
+        free(msg);
         return ret;
     }
 
@@ -670,6 +690,7 @@ int property_monitor_read(int fd, char* newkey, char* newvalue)
         }
     }
 
+    free(msg);
     return 0;
 }
 
