@@ -243,6 +243,7 @@ static bool kvdb_client(kvdb_server* server, int fd)
 {
     bool dirty = false;
     ssize_t len;
+    char* msg;
 
 #if CONFIG_KVDB_TIMEOUT_INTERVAL
     struct timeval timeout = {
@@ -253,7 +254,12 @@ static bool kvdb_client(kvdb_server* server, int fd)
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 #endif
 
-    char msg[PROP_MSG_MAX];
+    msg = malloc(PROP_MSG_MAX);
+    if (msg == NULL) {
+        KVERR("malloc failed\n");
+        goto out;
+    }
+
     msg[0] = msg[1] = msg[2] = 0; /* zero the first key bytes */
 
     len = recv(fd, msg, PROP_MSG_MAX, 0);
@@ -345,11 +351,13 @@ static bool kvdb_client(kvdb_server* server, int fd)
             send(fd, &err, 4, 0);
         }
         /* Direct return, not close the monitor fd */
-        return false;
+        dirty = false;
+        goto out;
     }
     }
 
 out:
+    free(msg);
     close(fd); /* done, close client socket */
     return dirty;
 }

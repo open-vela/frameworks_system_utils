@@ -64,9 +64,23 @@ static bool kvdb_is_comment(const char* line)
 
 int kvdb_load(struct kvdb* kvdb, const char* src, bool force)
 {
-    char tmpb[PATH_MAX];
-    const char* path = tmpb;
+    char* tmpb;
+    const char* path;
     const char* sep;
+
+    char* buf = malloc(PROP_MSG_MAX);
+    if (buf == NULL) {
+        KVERR("malloc failed\n")
+        return -ENOMEM;
+    }
+
+    tmpb = malloc(PATH_MAX);
+    if (tmpb == NULL) {
+        KVERR("malloc failed\n")
+        free(buf);
+        return -ENOMEM;
+    }
+    path = tmpb;
 
     while (*src) {
         sep = strchr(src, ';');
@@ -82,7 +96,6 @@ int kvdb_load(struct kvdb* kvdb, const char* src, bool force)
         if (!f)
             continue;
 
-        char buf[PROP_MSG_MAX];
         while (fgets(buf, PROP_MSG_MAX, f)) {
             if (kvdb_is_comment(buf))
                 continue;
@@ -104,6 +117,8 @@ int kvdb_load(struct kvdb* kvdb, const char* src, bool force)
     }
 
     kvdb_commit(kvdb);
+    free(tmpb);
+    free(buf);
 
     return 0;
 }
