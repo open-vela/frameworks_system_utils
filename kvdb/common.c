@@ -70,13 +70,13 @@ int kvdb_load(struct kvdb* kvdb, const char* src, bool force)
 
     char* buf = malloc(PROP_MSG_MAX);
     if (buf == NULL) {
-        KVERR("malloc failed\n")
+        KVERR("malloc failed\n");
         return -ENOMEM;
     }
 
     tmpb = malloc(PATH_MAX);
     if (tmpb == NULL) {
-        KVERR("malloc failed\n")
+        KVERR("malloc failed\n");
         free(buf);
         return -ENOMEM;
     }
