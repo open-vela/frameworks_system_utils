@@ -351,8 +351,8 @@ static bool kvdb_client(kvdb_server* server, int fd)
             send(fd, &err, 4, 0);
         }
         /* Direct return, not close the monitor fd */
-        dirty = false;
-        goto out;
+        free(msg);
+        return false;
     }
     }
 
