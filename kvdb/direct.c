@@ -128,7 +128,7 @@ int property_get(const char* key, char* value, const char* default_value)
         return ret;
 
     int val_len = kvdb_get(client, key, key_len, value);
-    if (val_len < 0)
+    if (val_len <= 0 || value[--val_len])
         goto out;
 
     kvdb_uninit(client);
