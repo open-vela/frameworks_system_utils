@@ -171,7 +171,12 @@ static gboolean modify_match(DBusConnection *conn, const char *member,
 		return FALSE;
 	}
 
-	dbus_pending_call_set_notify(call, modify_match_reply, NULL, NULL);
+	if (dbus_pending_call_get_completed(call)) {
+		modify_match_reply(call, NULL);
+	} else {
+		dbus_pending_call_set_notify(call, modify_match_reply, NULL, NULL);
+	}
+
 	dbus_pending_call_unref(call);
 
 	dbus_message_unref(msg);
@@ -498,8 +503,12 @@ static void get_all_properties(GDBusProxy *proxy)
 		return;
 	}
 
-	dbus_pending_call_set_notify(proxy->get_all_call,
+	if (dbus_pending_call_get_completed(proxy->get_all_call)) {
+		get_all_properties_reply(proxy->get_all_call, proxy);
+	} else {
+		dbus_pending_call_set_notify(proxy->get_all_call,
 					get_all_properties_reply, proxy, NULL);
+	}
 
 	dbus_message_unref(msg);
 }
@@ -936,8 +945,14 @@ gboolean dbus_proxy_refresh_property(GDBusProxy *proxy, const char *name)
 		return FALSE;
 	}
 
-	dbus_pending_call_set_notify(call, refresh_property_reply,
+	if (dbus_pending_call_get_completed(call)) {
+		refresh_property_reply(call, data);
+		refresh_property_free(data);
+	} else {
+		dbus_pending_call_set_notify(call, refresh_property_reply,
 						data, refresh_property_free);
+	}
+
 	dbus_pending_call_unref(call);
 
 	dbus_message_unref(msg);
@@ -1031,7 +1046,13 @@ gboolean dbus_proxy_set_property_basic(GDBusProxy *proxy,
 		return FALSE;
 	}
 
-	dbus_pending_call_set_notify(call, set_property_reply, data, free);
+	if (dbus_pending_call_get_completed(call)) {
+		set_property_reply(call, data);
+		free(data);
+	} else {
+		dbus_pending_call_set_notify(call, set_property_reply, data, free);
+	}
+
 	dbus_pending_call_unref(call);
 
 	dbus_message_unref(msg);
@@ -1091,7 +1112,13 @@ gboolean dbus_proxy_set_property_array(GDBusProxy *proxy,
 		return FALSE;
 	}
 
-	dbus_pending_call_set_notify(call, set_property_reply, data, free);
+	if (dbus_pending_call_get_completed(call)) {
+		set_property_reply(call, data);
+		free(data);
+	} else {
+		dbus_pending_call_set_notify(call, set_property_reply, data, free);
+	}
+
 	dbus_pending_call_unref(call);
 
 	dbus_message_unref(msg);
@@ -1166,9 +1193,14 @@ gboolean dbus_proxy_method_call(GDBusProxy *proxy, const char *method,
 		return FALSE;
 	}
 
-	dbus_pending_call_set_notify(call, method_call_reply, data, free);
-	dbus_pending_call_unref(call);
+	if (dbus_pending_call_get_completed(call)) {
+		method_call_reply(call, data);
+		free(data);
+	} else {
+		dbus_pending_call_set_notify(call, method_call_reply, data, free);
+	}
 
+	dbus_pending_call_unref(call);
 	dbus_message_unref(msg);
 
 	return TRUE;
@@ -1349,8 +1381,13 @@ static gboolean get_properties_non_standard(GDBusClient *client)
 			return FALSE;
 		}
 
-		dbus_pending_call_set_notify(proxy->get_all_call,
+		if (dbus_pending_call_get_completed(proxy->get_all_call)) {
+			get_properties_reply_not_standard(proxy->get_all_call, proxy);
+		} else {
+		    dbus_pending_call_set_notify(proxy->get_all_call,
 					get_properties_reply_not_standard, proxy, NULL);
+		}
+
 		dbus_message_unref(msg);
 	}
 
@@ -1514,9 +1551,13 @@ static void get_managed_objects(GDBusClient *client)
 		return;
 	}
 
-	dbus_pending_call_set_notify(client->get_objects_call,
+	if (dbus_pending_call_get_completed(client->get_objects_call)) {
+		get_managed_objects_reply(client->get_objects_call, client);
+	} else {
+		dbus_pending_call_set_notify(client->get_objects_call,
 						get_managed_objects_reply,
 						client, NULL);
+	}
 
 	dbus_message_unref(msg);
 }

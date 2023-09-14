@@ -707,7 +707,11 @@ static void check_service(DBusConnection *connection,
 		goto done;
 	}
 
-	dbus_pending_call_set_notify(data->call, service_reply, data, NULL);
+	if (dbus_pending_call_get_completed(data->call)) {
+		service_reply(data->call, data);
+	} else {
+		dbus_pending_call_set_notify(data->call, service_reply, data, NULL);
+	}
 
 done:
 	dbus_message_unref(message);
