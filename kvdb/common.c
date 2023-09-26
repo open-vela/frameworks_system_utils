@@ -62,6 +62,15 @@ static bool kvdb_is_comment(const char* line)
  * Public Functions
  ****************************************************************************/
 
+int kvdb_get_index(const char* key)
+{
+    if (strncmp(key, PERSIST_LABEL, PERSIST_LABEL_LEN) == 0) {
+        return KVDB_PERSIST;
+    } else {
+        return KVDB_MEM;
+    }
+}
+
 int kvdb_load(struct kvdb* kvdb, const char* src, bool force)
 {
     char* tmpb;

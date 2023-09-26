@@ -47,6 +47,19 @@
 extern "C" {
 #endif
 
+#define PERSIST_LABEL "persist."
+#define PERSIST_LABEL_LEN 8
+
+/****************************************************************************
+ * Public Type Definitions
+ ****************************************************************************/
+
+enum {
+    KVDB_PERSIST, /* save key-value pairs in flash */
+    KVDB_MEM, /* save key-value pairs in memory */
+    KVDB_COUNT
+};
+
 struct kvdb;
 
 typedef int (*kvdb_consume)(const char* key, size_t key_len, const char* value, size_t val_len, void* cookie);
@@ -61,6 +74,7 @@ int kvdb_init(struct kvdb** kvdb);
 void kvdb_uninit(struct kvdb* kvdb);
 
 int property_set_(const char* key, const char* value, bool oneway);
+int kvdb_get_index(const char* key);
 
 #if defined(__cplusplus)
 }

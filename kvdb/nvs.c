@@ -33,36 +33,13 @@
  * Private Type Definitions
  ****************************************************************************/
 
-enum {
-    /* save key-value pairs in flash */
-
-    KVDB_PERSIST,
-
-    /* save key-value pairs in memory */
-
-    KVDB_MEM,
-    KVDB_COUNT
-};
-
 struct kvdb {
     int fd[KVDB_COUNT];
 };
 
-#define PERSIST_LABEL "persist."
-#define PERSIST_LABEL_LEN 8
-
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
-
-static int kvdb_get_index(const char* key)
-{
-    if (strncmp(key, PERSIST_LABEL, PERSIST_LABEL_LEN) == 0) {
-        return KVDB_PERSIST;
-    } else {
-        return KVDB_MEM;
-    }
-}
 
 static const char* kvdb_skip_prefix(const char* key, int index)
 {
