@@ -22,10 +22,6 @@
 
 #include "internal.h"
 
-#define KVDB_MEM 0
-#define KVDB_PERSIST 1
-#define KVDB_COUNT 2
-
 typedef struct kvdb_consume_data {
     kvdb_consume consume;
     void* cookie;
@@ -45,14 +41,6 @@ struct kvdb {
 static bool kvdb_is_readonly(const char* key)
 {
     return strncmp(key, "ro.", 3) == 0;
-}
-
-static int kvdb_get_index(const char* key)
-{
-    if (strncmp(key, "persist.", 8) == 0)
-        return KVDB_PERSIST;
-    else
-        return KVDB_MEM;
 }
 
 int kvdb_set(struct kvdb* kvdb, const char* key, size_t key_len, const char* value, size_t val_len, bool force)
