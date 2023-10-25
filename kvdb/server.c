@@ -179,7 +179,7 @@ static int kvdb_bind(int fd[])
     memset(fd, 0, sizeof(*fd) * KVFD_COUNT);
 
     for (int i = 0; i < KVFD_COUNT; i++) {
-        fd[i] = socket(family[i], SOCK_STREAM, 0);
+        fd[i] = socket(family[i], SOCK_STREAM | SOCK_CLOEXEC, 0);
         if (fd[i] < 0)
             continue;
 
