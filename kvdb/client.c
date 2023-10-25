@@ -70,9 +70,9 @@ static ssize_t recv_safe(int sockfd, char* buf, size_t offset, size_t len)
 static int property_connect(void)
 {
 #ifdef CONFIG_KVDB_SERVER
-    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
 #else
-    int fd = socket(AF_RPMSG, SOCK_STREAM, 0);
+    int fd = socket(AF_RPMSG, SOCK_STREAM | SOCK_CLOEXEC, 0);
 #endif
     if (fd < 0)
         return -errno;

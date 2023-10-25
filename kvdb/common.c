@@ -101,7 +101,7 @@ int kvdb_load(struct kvdb* kvdb, const char* src, bool force)
             src += strlen(src);
         }
 
-        FILE* f = fopen(path, "r");
+        FILE* f = fopen(path, "re");
         if (!f)
             continue;
 
