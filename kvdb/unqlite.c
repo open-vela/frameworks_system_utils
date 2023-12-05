@@ -233,9 +233,6 @@ int kvdb_init(struct kvdb** kvdb)
             goto out;
     }
 
-    /* load initial value from text file */
-    kvdb_load(*kvdb, CONFIG_KVDB_SOURCE_PATH, false);
-
     return ret;
 
 out:

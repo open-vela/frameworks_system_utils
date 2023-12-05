@@ -107,10 +107,6 @@ int kvdb_init(struct kvdb** kvdb)
     handle->fd[KVDB_MEM] = ret;
     *kvdb = handle;
 
-    /* load initial value from text file */
-
-    kvdb_load(*kvdb, CONFIG_KVDB_SOURCE_PATH, false);
-
     return 0;
 
 err:

@@ -52,12 +52,6 @@ static inline int ascii2nibble(char ascii)
         return -ERANGE;
 }
 
-static bool kvdb_is_comment(const char* line)
-{
-    size_t i = strspn(line, " \t\r\n");
-    return line[i] == '\0' || line[i] == '#';
-}
-
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
@@ -69,67 +63,6 @@ int kvdb_get_index(const char* key)
     } else {
         return KVDB_MEM;
     }
-}
-
-int kvdb_load(struct kvdb* kvdb, const char* src, bool force)
-{
-    char* tmpb;
-    const char* path;
-    const char* sep;
-
-    char* buf = malloc(PROP_MSG_MAX);
-    if (buf == NULL) {
-        KVERR("malloc failed\n");
-        return -ENOMEM;
-    }
-
-    tmpb = malloc(PATH_MAX);
-    if (tmpb == NULL) {
-        KVERR("malloc failed\n");
-        free(buf);
-        return -ENOMEM;
-    }
-    path = tmpb;
-
-    while (*src) {
-        sep = strchr(src, ';');
-        if (sep) {
-            strlcpy(tmpb, src, MIN(PATH_MAX, sep - src + 1));
-            src = sep + 1;
-        } else {
-            path = src;
-            src += strlen(src);
-        }
-
-        FILE* f = fopen(path, "re");
-        if (!f)
-            continue;
-
-        while (fgets(buf, PROP_MSG_MAX, f)) {
-            if (kvdb_is_comment(buf))
-                continue;
-
-            char* tmp;
-            char* key = strtok_r(buf, "=", &tmp);
-            char* value = strtok_r(NULL, "\n", &tmp);
-            if (!key || !value)
-                continue;
-
-            size_t key_len = strlen(key) + 1;
-            if (!force && kvdb_get(kvdb, key, key_len, NULL) >= 0)
-                continue;
-
-            kvdb_set(kvdb, key, key_len, value, strlen(value) + 1, true);
-        }
-
-        fclose(f);
-    }
-
-    kvdb_commit(kvdb);
-    free(tmpb);
-    free(buf);
-
-    return 0;
 }
 
 int property_set(const char* key, const char* value)
