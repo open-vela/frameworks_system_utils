@@ -212,8 +212,10 @@ void kvdb_uninit(struct kvdb* kvdb)
 int kvdb_init(struct kvdb** kvdb)
 {
     static const char* path[KVDB_COUNT] = {
-        [KVDB_MEM] = CONFIG_KVDB_TEMPORARY_PATH,
         [KVDB_PERSIST] = CONFIG_KVDB_PERSIST_PATH,
+#ifdef CONFIG_KVDB_TEMPORARY_STORAGE
+        [KVDB_MEM] = CONFIG_KVDB_TEMPORARY_PATH,
+#endif
     };
 
     int ret = 0;
@@ -226,8 +228,10 @@ int kvdb_init(struct kvdb** kvdb)
     for (int i = 0; i < KVDB_COUNT; i++) {
         if (path[i][0])
             ret = unqlite_open(&(*kvdb)->db[i], path[i], UNQLITE_OPEN_CREATE | UNQLITE_OPEN_OMIT_JOURNALING);
+#ifdef CONFIG_KVDB_TEMPORARY_STORAGE
         else
             ret = unqlite_open(&(*kvdb)->db[i], NULL, UNQLITE_OPEN_IN_MEMORY);
+#endif
 
         if (ret < 0)
             goto out;
