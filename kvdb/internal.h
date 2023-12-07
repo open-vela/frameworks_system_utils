@@ -56,7 +56,9 @@ extern "C" {
 
 enum {
     KVDB_PERSIST, /* save key-value pairs in flash */
+#ifdef CONFIG_KVDB_TEMPORARY_STORAGE
     KVDB_MEM, /* save key-value pairs in memory */
+#endif
     KVDB_COUNT
 };
 

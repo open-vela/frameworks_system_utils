@@ -86,25 +86,27 @@ int kvdb_init(struct kvdb** kvdb)
         return -ENOMEM;
     }
 
-    ret = open(CONFIG_KVDB_NVS_FLASH_PATH, O_RDWR | O_CLOEXEC);
+    ret = open(CONFIG_KVDB_PERSIST_PATH, O_RDWR | O_CLOEXEC);
     if (ret < 0) {
         ret = -errno;
         KVERR("open %s error with %d",
-            CONFIG_KVDB_NVS_FLASH_PATH, ret);
+            CONFIG_KVDB_PERSIST_PATH, ret);
         goto err;
     }
 
     handle->fd[KVDB_PERSIST] = ret;
 
-    ret = open(CONFIG_KVDB_NVS_RAM_PATH, O_RDWR | O_CLOEXEC);
+#ifdef CONFIG_KVDB_TEMPORARY_STORAGE
+    ret = open(CONFIG_KVDB_TEMPORARY_PATH, O_RDWR | O_CLOEXEC);
     if (ret < 0) {
         ret = -errno;
         KVERR("open %s error with %d",
-            CONFIG_KVDB_NVS_RAM_PATH, ret);
+            CONFIG_KVDB_TEMPORARY_PATH, ret);
         goto err;
     }
 
     handle->fd[KVDB_MEM] = ret;
+#endif
     *kvdb = handle;
 
     return 0;
@@ -174,6 +176,9 @@ int kvdb_set(struct kvdb* kvdb, const char* key, size_t key_len,
         return -EINVAL;
 
     index = kvdb_get_index(key);
+    if (index < 0)
+        return index;
+
     key = kvdb_skip_prefix(key, index);
 
     if (strlen(key) >= sizeof(data.name))
@@ -220,6 +225,9 @@ int kvdb_get(struct kvdb* kvdb, const char* key, size_t key_len, char* value)
         return -EINVAL;
 
     index = kvdb_get_index(key);
+    if (index < 0)
+        return index;
+
     key = kvdb_skip_prefix(key, index);
 
     if (strlen(key) >= sizeof(data.name))
@@ -265,6 +273,9 @@ int kvdb_delete(struct kvdb* kvdb, const char* key, size_t key_len)
         return -EINVAL;
 
     index = kvdb_get_index(key);
+    if (index < 0)
+        return index;
+
     key = kvdb_skip_prefix(key, index);
 
     if (strlen(key) >= sizeof(data.name))

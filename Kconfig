@@ -99,6 +99,10 @@ config KVDB_SOURCE_PATH
 	string "database default value source path"
 	default "/etc/build.prop"
 
+config KVDB_TEMPORARY_STORAGE
+	bool "enable non-persistent Key-value storage"
+	default !DEFAULT_SMALL
+
 choice
 	prompt "the storage method of Key-value"
 	default KVDB_UNQLITE
@@ -114,30 +118,16 @@ config KVDB_NVS
 
 endchoice
 
-if KVDB_UNQLITE
-
 config KVDB_PERSIST_PATH
 	string "persistent database path"
-	default "/data/persist.db"
+	default "/data/persist.db" if KVDB_UNQLITE
+	default "/dev/config" if KVDB_NVS
 
 config KVDB_TEMPORARY_PATH
 	string "non-persistent database path"
-	default "/tmp/temporary.db"
-
-endif # !KVDB_UNQLITE
-
-
-if KVDB_NVS
-
-config KVDB_NVS_FLASH_PATH
-	string "persistent mtd device path"
-	default "/dev/config"
-
-config KVDB_NVS_RAM_PATH
-	string "temporary ram device path"
-	default "/dev/config_ram"
-
-endif # !KVDB_NVS
+	default "/tmp/temporary.db" if KVDB_UNQLITE
+	default "/dev/config_ram" if KVDB_NVS
+	depends on KVDB_TEMPORARY_STORAGE
 
 endif # KVDB_DIRECT || KVDB_SERVER
 

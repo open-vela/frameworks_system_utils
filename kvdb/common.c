@@ -61,7 +61,11 @@ int kvdb_get_index(const char* key)
     if (strncmp(key, PERSIST_LABEL, PERSIST_LABEL_LEN) == 0) {
         return KVDB_PERSIST;
     } else {
+#ifdef CONFIG_KVDB_TEMPORARY_STORAGE
         return KVDB_MEM;
+#else
+        return -EINVAL;
+#endif
     }
 }
 
