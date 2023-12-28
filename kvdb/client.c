@@ -735,11 +735,25 @@ int property_commit(void)
 {
     int fd = property_connect();
     int ret;
+    int value;
     if (fd < 0)
         return fd;
 
-    ret = send(fd, "C", 1, 0) > 0 ? 0 : -errno;
+    ret = send(fd, "C", 1, 0);
+    if (ret < 0) {
+        ret = -errno;
+        goto out;
+    }
 
+    ret = recv(fd, &value, sizeof(value), 0);
+    if (ret < sizeof(value)) {
+        ret = -errno;
+        goto out;
+    }
+
+    ret = value;
+
+out:
     close(fd);
     return ret;
 }

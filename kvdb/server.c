@@ -394,7 +394,8 @@ static bool kvdb_client(kvdb_server* server, int fd)
         break;
     }
     case 'C': {
-        kvdb_commit(server->kvdb);
+        int ret = kvdb_commit(server->kvdb);
+        send(fd, &ret, sizeof(ret), 0);
         break;
     }
     case 'R': {
