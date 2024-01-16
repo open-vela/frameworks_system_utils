@@ -31,9 +31,12 @@ int main(int argc, char* argv[])
         printf("Usage: %s <key> [value]\n", argv[0]);
 
     if (ret > 0)
-       printf("Error: %s\n", strerror(ret));
-    else
-        property_commit();
+        printf("Error: %s\n", strerror(ret));
+    else {
+        ret = -property_commit();
+        if (ret > 0)
+            printf("Error: commit %s\n", strerror(ret));
+    }
 
     return ret;
 }
