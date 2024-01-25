@@ -187,8 +187,12 @@ int kvdb_commit(struct kvdb* kvdb)
 
     for (int i = 0; i < KVDB_COUNT; i++) {
         int r = unqlite_commit(kvdb->db[i]);
-        if (r < 0 && ret == 0)
-            ret = r;
+        if (r < 0) {
+            KVERR("commit db:%d error %d!\n", i, r);
+            if (ret == 0) {
+                ret = r;
+            }
+        }
     }
 
     return ret;
