@@ -741,17 +741,22 @@ int property_commit(void)
 
     ret = send(fd, "C", 1, 0);
     if (ret < 0) {
+        KVERR("send error %d\n", errno);
         ret = -errno;
         goto out;
     }
 
     ret = recv(fd, &value, sizeof(value), 0);
     if (ret < sizeof(value)) {
+        KVERR("recv error %d, ret %d\n", errno, ret);
         ret = -errno;
         goto out;
     }
 
     ret = value;
+    if (ret < 0) {
+        KVERR("commit error %d\n", ret);
+    }
 
 out:
     close(fd);
