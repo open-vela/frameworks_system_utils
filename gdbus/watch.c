@@ -548,16 +548,16 @@ static DBusHandlerResult message_filter(DBusConnection *connection,
 		if (data->owner && strcmp(sender, data->owner) != 0)
 			continue;
 
-		if (data->path && strcmp(path, data->path) != 0)
+		if (data->path && (!path || strcmp(path, data->path) != 0))
 			continue;
 
-		if (data->interface && strcmp(iface, data->interface) != 0)
+		if (data->interface && (!iface || strcmp(iface, data->interface) != 0))
 			continue;
 
-		if (data->member && strcmp(member, data->member) != 0)
+		if (data->member && (!member || strcmp(member, data->member) != 0))
 			continue;
 
-		if (data->argument && strcmp(arg, data->argument) != 0)
+		if (data->argument && (!arg || strcmp(arg, data->argument) != 0))
 			continue;
 
 		if (data->handle_func) {
