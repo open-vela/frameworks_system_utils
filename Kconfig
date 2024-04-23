@@ -70,10 +70,14 @@ config KVDB_STACKSIZE
 config KVDB_SERVER
 	bool "KVDB server"
 	default n
+	---help---
+		Build kvdb in server mode. Operate database in a unified manner through the kvdb server
 
 config KVDB_DIRECT
 	bool "Access KVDB directly"
 	depends on !KVDB_SERVER
+	---help---
+		Operate the database directly. Applicable to scenarios where cross-core communication is not required
 
 if !KVDB_DIRECT
 
@@ -110,11 +114,17 @@ choice
 config KVDB_UNQLITE
 	bool "UNQLITE"
 	depends on UNQLITE
+	depends on FS_LOCK_BUCKET_SIZE > 0
+	---help---
+		Configure the unqlite database to store Key-value. File locks are used in unqlite
+		mode. Set FS_LOCK_BUCKET_SIZE to a nonzero value
 
 config KVDB_NVS
 	bool "NVS"
 	select MTD_CONFIG_NAMED
 	depends on MTD_CONFIG_FAIL_SAFE
+	---help---
+		Configure using Non-Volatile Storage to store Key-value
 
 endchoice
 
