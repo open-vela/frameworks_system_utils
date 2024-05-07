@@ -14,6 +14,12 @@
 # limitations under the License.
 #
 
+ifneq ($(CONFIG_SCHED_INSTRUMENTATION_DUMP)\
+${CONFIG_ANDROID_LIBBASE}\
+${CONFIG_ATRACE}\
+${CONFIG_LIB_DBUS}\
+${CONFIG_KVDB},)
 CONFIGURED_APPS += $(APPDIR)/frameworks/utils
 CFLAGS += ${INCDIR_PREFIX}$(APPDIR)/frameworks/utils/include
 CXXFLAGS += ${INCDIR_PREFIX}$(APPDIR)/frameworks/utils/include
+endif
