@@ -45,7 +45,7 @@ if(CONFIG_SCHED_INSTRUMENTATION_DUMP
 
   if(CONFIG_LIB_DBUS)
     file(GLOB GDBUS_CSRCS gdbus/*.c)
-    list(APPEND CSRCS ${GDBUS})
+    list(APPEND CSRCS ${GDBUS_CSRCS})
     list(APPEND CFLAGS -DDBUS_COMPILATION -DVERSION="1.15.1")
     list(APPEND INCDIR ${NUTTX_APPS_DIR}/external/dbus/dbus
          ${NUTTX_APPS_DIR}/external/glib/glib/glib
