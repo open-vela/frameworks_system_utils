@@ -18,9 +18,10 @@
  * Included Files
  ****************************************************************************/
 
+#include <nuttx/streams.h>
+
 #include <debug.h>
 #include <errno.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <syslog.h>
@@ -492,7 +493,7 @@ int __android_log_error_write(int tag, const char* subTag, int32_t uid,
     const char* data, uint32_t dataLen)
 {
     __android_log_print(ANDROID_LOG_ERROR, subTag,
-           "tag: %d uid: %"PRId32" data: %s\n",
-           tag, uid, data);
+        "tag: %d uid: %" PRId32 " data: %s\n",
+        tag, uid, data);
     return 0;
 }
