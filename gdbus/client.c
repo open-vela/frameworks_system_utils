@@ -57,6 +57,7 @@ struct GDBusClient {
 	GDBusProxyFunction proxy_added;
 	GDBusProxyFunction proxy_removed;
 	GDBusProxyPropertyFilterFunction proxy_property_filter;
+	GDBusProxyFilterFunction proxy_filter;
 	GDBusClientFunction ready;
 	void *ready_data;
 	gboolean ready_called;
@@ -638,6 +639,10 @@ static GDBusProxy *proxy_new(GDBusClient *client, const char *path,
 						const char *interface)
 {
 	GDBusProxy *proxy;
+
+	if (client->proxy_filter && client->proxy_filter(client, path, interface)) {
+		return NULL;
+	}
 
 	proxy = calloc(1, sizeof(GDBusProxy));
 	if (proxy == NULL)
@@ -1821,6 +1826,18 @@ gboolean dbus_client_set_proxy_handlers(GDBusClient *client,
 
 	if (proxy_added_ || proxy_removed || property_changed || proxy_property_filter)
 		get_managed_objects(client);
+
+	return TRUE;
+}
+
+gboolean dbus_client_set_proxy_filter(GDBusClient *client,
+					GDBusProxyFilterFunction proxy_filter,
+					void *user_data)
+{
+	if (client == NULL)
+		return FALSE;
+
+	client->proxy_filter = proxy_filter;
 
 	return TRUE;
 }

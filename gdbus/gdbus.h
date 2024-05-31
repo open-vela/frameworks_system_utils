@@ -88,6 +88,7 @@ typedef uint32_t     guint32;
 #define g_dbus_client_set_signal_watch dbus_client_set_signal_watch
 #define g_dbus_client_set_ready_watch dbus_client_set_ready_watch
 #define g_dbus_client_set_proxy_handlers dbus_client_set_proxy_handlers
+#define g_dbus_client_set_proxy_filter dbus_client_set_proxy_filter
 
 typedef struct GDBusArgInfo GDBusArgInfo;
 typedef struct GDBusMethodTable GDBusMethodTable;
@@ -437,6 +438,8 @@ typedef void (* GDBusProxyFunction) (GDBusProxy *proxy, void *user_data);
 typedef gboolean (* GDBusProxyPropertyFilterFunction) (GDBusProxy *proxy);
 typedef void (* GDBusPropertyFunction) (GDBusProxy *proxy, const char *name,
 					DBusMessageIter *iter, void *user_data);
+typedef gboolean (* GDBusProxyFilterFunction) (GDBusClient *client, const char *path,
+						const char *interface);
 
 gboolean dbus_proxy_set_property_watch(GDBusProxy *proxy,
 			GDBusPropertyFunction function, void *user_data);
@@ -469,6 +472,9 @@ gboolean dbus_client_set_proxy_handlers(GDBusClient *client,
 					GDBusProxyFunction proxy_removed,
 					GDBusProxyPropertyFilterFunction proxy_property_filter,
 					GDBusPropertyFunction property_changed,
+					void *user_data);
+gboolean dbus_client_set_proxy_filter(GDBusClient *client,
+					GDBusProxyFilterFunction proxy_filter,
 					void *user_data);
 
 #ifdef __cplusplus
