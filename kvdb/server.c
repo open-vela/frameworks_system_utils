@@ -287,7 +287,7 @@ static int kvdb_list_consume(const char* key, size_t key_len,
     msg.msg_iov = iov;
     msg.msg_iovlen = 3;
 
-    int fd = (int)cookie;
+    int fd = (intptr_t)cookie;
     int ret = sendmsg(fd, &msg, 0);
     return ret > 0 ? 0 : ret;
 }
