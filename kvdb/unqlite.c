@@ -43,6 +43,11 @@ static bool kvdb_is_readonly(const char* key)
     return strncmp(key, "ro.", 3) == 0;
 }
 
+static bool unqlite_kv_is_exist(unqlite* db, const char* key, size_t key_len)
+{
+    return unqlite_kv_fetch(db, key, key_len, NULL, NULL) >= 0;
+}
+
 int kvdb_set(struct kvdb* kvdb, const char* key, size_t key_len, const char* value, size_t val_len, bool force)
 {
     if (--key_len >= PROP_NAME_MAX)
@@ -57,9 +62,6 @@ int kvdb_set(struct kvdb* kvdb, const char* key, size_t key_len, const char* val
     if (value[val_len])
         return -EINVAL;
 
-    if (kvdb_is_readonly(key) && !force)
-        return -EPERM;
-
     /* in environment variable? */
     if (getenv(key)) {
         int ret = setenv(key, value, 1);
@@ -72,6 +74,9 @@ int kvdb_set(struct kvdb* kvdb, const char* key, size_t key_len, const char* val
     int i = kvdb_get_index(key);
     if (i < 0)
         return i;
+
+    if (!force && kvdb_is_readonly(key) && unqlite_kv_is_exist(kvdb->db[i], key, key_len + 1))
+        return -EPERM;
 
     return unqlite_kv_store(kvdb->db[i], key, ++key_len, value, ++val_len);
 }
