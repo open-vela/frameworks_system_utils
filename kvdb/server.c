@@ -159,6 +159,7 @@ static int kvdb_load(struct kvdb* kvdb, const char* src, bool force)
     char* tmpb;
     const char* path;
     const char* sep;
+    int retry = 20;
 
     char* buf = malloc(PROP_MSG_MAX);
     if (buf == NULL) {
@@ -183,6 +184,10 @@ static int kvdb_load(struct kvdb* kvdb, const char* src, bool force)
             path = src;
             src += strlen(src);
         }
+
+        /* Wait filesystem mount success */
+        while (access(path, 0) < 0 && retry-- > 0)
+            usleep(10);
 
         FILE* f = fopen(path, "re");
         if (!f)
