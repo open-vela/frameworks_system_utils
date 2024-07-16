@@ -31,8 +31,13 @@
 
 #define KVFD_LOCAL 0
 #define KVFD_REMOTE 1
-#define KVFD_COUNT 2
 #define KVFD_MAX 8
+
+#ifdef CONFIG_NET_RPMSG
+#define KVFD_COUNT 2
+#else
+#define KVFD_COUNT 1
+#endif
 
 typedef struct kvdb_monitor {
     int fd;
@@ -224,7 +229,9 @@ static int kvdb_bind(int fd[])
 {
     const int family[] = {
         [KVFD_LOCAL] = AF_UNIX,
+#ifdef CONFIG_NET_RPMSG
         [KVFD_REMOTE] = AF_RPMSG,
+#endif
     };
 
     const struct sockaddr_un addr0 = {
@@ -232,20 +239,26 @@ static int kvdb_bind(int fd[])
         .sun_path = PROP_SERVER_PATH,
     };
 
+#ifdef CONFIG_NET_RPMSG
     const struct sockaddr_rpmsg addr1 = {
         .rp_family = AF_RPMSG,
         .rp_cpu = "",
         .rp_name = PROP_SERVER_PATH,
     };
+#endif
 
     const struct sockaddr* addr[] = {
         [KVFD_LOCAL] = (const struct sockaddr*)&addr0,
+#ifdef CONFIG_NET_RPMSG
         [KVFD_REMOTE] = (const struct sockaddr*)&addr1,
+#endif
     };
 
     const socklen_t addrlen[] = {
         [KVFD_LOCAL] = sizeof(struct sockaddr_un),
+#ifdef CONFIG_NET_RPMSG
         [KVFD_REMOTE] = sizeof(struct sockaddr_rpmsg),
+#endif
     };
 
     memset(fd, 0, sizeof(*fd) * KVFD_COUNT);
@@ -475,7 +488,11 @@ static void kvdb_loop(kvdb_server* server)
         int nfds = epoll_wait(server->efd, evs, KVFD_MAX, timeout);
         for (int i = 0; i < nfds; i++) {
             int fd = *(int*)evs[i].data.ptr;
+#ifdef CONFIG_NET_RPMSG
             if (fd != server->fd[0] && fd != server->fd[1]) {
+#else
+            if (fd != server->fd[0]) {
+#endif
                 if ((evs[i].events & EPOLLHUP) != 0) {
                     kvdb_monitor_close(server, &evs[i]);
                 }
