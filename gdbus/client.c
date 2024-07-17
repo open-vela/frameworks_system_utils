@@ -398,7 +398,7 @@ done:
     if (proxy->prop_func)
         proxy->prop_func(proxy, name, &value, proxy->prop_data);
 
-    if (client == NULL || send_changed == FALSE)
+    if (send_changed == FALSE)
         return;
 
     if (client->property_changed)
