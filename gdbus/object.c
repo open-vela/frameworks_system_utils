@@ -192,7 +192,9 @@ static void generate_introspection_xml(DBusConnection* conn,
 
     free(data->introspect);
 
-    _dbus_string_init(&str);
+    if (!_dbus_string_init(&str))
+        return;
+
     _dbus_string_append_printf(&str, DBUS_INTROSPECT_1_0_XML_DOCTYPE_DECL_NODE);
     _dbus_string_append_printf(&str, "<node>");
 

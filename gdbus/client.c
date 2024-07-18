@@ -1681,13 +1681,15 @@ GDBusClient* dbus_client_new_full(DBusConnection* connection,
         "InterfacesRemoved",
         interfaces_removed,
         client, NULL);
-    _dbus_string_init(&str);
-    _dbus_string_append_printf(&str, "type='signal', sender='%s',"
-                                     "path_namespace='%s'",
-        client->service_name, client->base_path);
-    _dbus_string_copy_data(&str, &rule);
-    _dbus_string_free(&str);
-    ptr_array_add(&client->match_rules, rule);
+
+    if (_dbus_string_init(&str)) {
+        _dbus_string_append_printf(&str, "type='signal', sender='%s',"
+                                         "path_namespace='%s'",
+            client->service_name, client->base_path);
+        _dbus_string_copy_data(&str, &rule);
+        _dbus_string_free(&str);
+        ptr_array_add(&client->match_rules, rule);
+    }
 
     for (i = 0; i < client->match_rules->len; i++) {
         modify_match(client->dbus_conn, "AddMatch",
