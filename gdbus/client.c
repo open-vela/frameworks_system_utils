@@ -1132,20 +1132,31 @@ struct method_call_data {
     GDBusReturnFunction function;
     void* user_data;
     GDBusDestroyFunction destroy;
+    bool reply_handled;
+    int ref_count;
 };
 
 static void method_call_reply(DBusPendingCall* call, void* user_data)
 {
     struct method_call_data* data = user_data;
-    DBusMessage* reply = dbus_pending_call_steal_reply(call);
+    if (!data->reply_handled && dbus_pending_call_get_completed(call)) {
+        data->reply_handled = true;
+        DBusMessage* reply = dbus_pending_call_steal_reply(call);
+        if (reply) {
+            if (data->function)
+                data->function(reply, data->user_data);
 
-    if (data->function)
-        data->function(reply, data->user_data);
+            if (data->destroy)
+                data->destroy(data->user_data);
 
-    if (data->destroy)
-        data->destroy(data->user_data);
+            dbus_message_unref(reply);
+            dbus_pending_call_unref(call);
+        }
+    }
 
-    dbus_message_unref(reply);
+    data->ref_count--;
+    if (data->ref_count == 0)
+        free(data);
 }
 
 gboolean dbus_proxy_method_call(GDBusProxy* proxy, const char* method,
@@ -1187,6 +1198,8 @@ gboolean dbus_proxy_method_call(GDBusProxy* proxy, const char* method,
     data->function = function;
     data->user_data = user_data;
     data->destroy = destroy;
+    data->reply_handled = false;
+    data->ref_count = 1;
 
     if (dbus_send_message_with_reply(client->dbus_conn, msg,
             &call, METHOD_CALL_TIMEOUT)
@@ -1198,12 +1211,15 @@ gboolean dbus_proxy_method_call(GDBusProxy* proxy, const char* method,
 
     if (dbus_pending_call_get_completed(call)) {
         method_call_reply(call, data);
-        free(data);
     } else {
-        dbus_pending_call_set_notify(call, method_call_reply, data, free);
+        data->ref_count++;
+        dbus_pending_call_set_notify(call, method_call_reply, data, NULL);
+        if (dbus_pending_call_get_completed(call)) {
+            dbus_pending_call_cancel(call);
+            method_call_reply(call, data);
+        }
     }
 
-    dbus_pending_call_unref(call);
     dbus_message_unref(msg);
 
     return TRUE;
