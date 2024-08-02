@@ -285,7 +285,9 @@ int property_get(const char* key, char* value, const char* default_value)
 
         val_len = recv(fd, value, PROP_VALUE_MAX, 0);
         if (val_len <= 0 || value[--val_len]) {
-            KVERR("recv failed, val_len=%d\n", val_len);
+            if (val_len != 0) {
+                KVERR("recv failed, val_len=%d\n", val_len);
+            }
             goto out_fd;
         }
     } else {
@@ -296,7 +298,9 @@ int property_get(const char* key, char* value, const char* default_value)
         char tmpvalue[2];
         val_len = recv(fd, tmpvalue, 2, 0);
         if (val_len <= 0) {
-            KVERR("recv failed, val_len=%d\n", val_len);
+            if (val_len != 0) {
+                KVERR("recv failed, val_len=%d\n", val_len);
+            }
             goto out_fd;
         }
     }
