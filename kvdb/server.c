@@ -195,8 +195,10 @@ static int kvdb_load(struct kvdb* kvdb, const char* src, bool force)
             usleep(10);
 
         FILE* f = fopen(path, "re");
-        if (!f)
+        if (!f) {
+            KVERR("kvdb open:%s failed, errno:%d\n", path, errno);
             continue;
+        }
 
         while (fgets(buf, PROP_MSG_MAX, f)) {
             if (kvdb_is_comment(buf))
