@@ -96,13 +96,9 @@
  * Simplified macro to send an info radio log message using  current LOG_TAG.
  */
 #ifndef RLOGI
-#if LOG_NDEBUG
-#define RLOGI(...) ((void)0)
-#else
 #define RLOGI(...)                                                        \
   ((void)__android_log_buf_print(LOG_ID_RADIO, ANDROID_LOG_INFO, LOG_TAG, \
                                  __VA_ARGS__))
-#endif
 #endif
 
 #ifndef RLOGI_IF
@@ -117,13 +113,9 @@
  * Simplified macro to send a warning radio log message using current LOG_TAG.
  */
 #ifndef RLOGW
-#if LOG_NDEBUG
-#define RLOGW(...) ((void)0)
-#else
 #define RLOGW(...)                                                        \
   ((void)__android_log_buf_print(LOG_ID_RADIO, ANDROID_LOG_WARN, LOG_TAG, \
                                  __VA_ARGS__))
-#endif
 #endif
 
 #ifndef RLOGW_IF
@@ -138,13 +130,9 @@
  * Simplified macro to send an error radio log message using current LOG_TAG.
  */
 #ifndef RLOGE
-#if LOG_NDEBUG
-#define RLOGE(...) ((void)0)
-#else
 #define RLOGE(...)                                                         \
   ((void)__android_log_buf_print(LOG_ID_RADIO, ANDROID_LOG_ERROR, LOG_TAG, \
                                  __VA_ARGS__))
-#endif
 #endif
 
 #ifndef RLOGE_IF
