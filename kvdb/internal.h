@@ -64,17 +64,16 @@ enum {
 
 struct kvdb;
 
-typedef int (*kvdb_consume)(const char* key, size_t key_len, const char* value, size_t val_len, void* cookie);
+typedef void (*kvdb_consume)(const char* key, const void* value, size_t val_len, void* cookie);
 
-int kvdb_set(struct kvdb* kvdb, const char* key, size_t key_len, const char* value, size_t val_len, bool force);
-int kvdb_get(struct kvdb* kvdb, const char* key, size_t key_len, char* value);
+int kvdb_set(struct kvdb* kvdb, const char* key, size_t key_len, const void* value, size_t val_len, bool force);
+ssize_t kvdb_get(struct kvdb* kvdb, const char* key, size_t key_len, void* value, size_t val_len);
 int kvdb_delete(struct kvdb* kvdb, const char* key, size_t key_len);
 int kvdb_list(struct kvdb* kvdb, kvdb_consume consume, void* cookie);
 int kvdb_commit(struct kvdb* kvdb);
 int kvdb_init(struct kvdb** kvdb);
 void kvdb_uninit(struct kvdb* kvdb);
 
-int property_set_(const char* key, const char* value, bool oneway);
 int kvdb_get_index(const char* key);
 
 #if defined(__cplusplus)

@@ -104,16 +104,16 @@ static void kvdb_monitor_close(kvdb_server* server, struct epoll_event* ev)
 }
 
 /* Notify the client the value changed (updated or deleted) */
-static void kvdb_monitor_notify(kvdb_server* server, const char* key, const char* value)
+static void kvdb_monitor_notify(kvdb_server* server, const char* key, const void* value, size_t val_len)
 {
     size_t key_len = strlen(key) + 1;
 
     /* value != NULL
-      *-------------------------------------*
-      |   1   |   1   | key_len |  val_len  |
-      |-------------------------------------|
-      |key_len|val_len|[key'\0']|[value'\0']|
-      *-------------------------------------*
+      *---------------------------------*
+      |   1   |   1   | key_len |val_len|
+      |---------------------------------|
+      |key_len|val_len|[key'\0']|[value]|
+      *---------------------------------*
       * value == NULL
       *-------------------------*
       |   1   |   1   | key_len |
@@ -121,7 +121,6 @@ static void kvdb_monitor_notify(kvdb_server* server, const char* key, const char
       |key_len|   0   |[key'\0']|
       *-------------------------*/
 
-    size_t val_len = value ? strlen(value) + 1 : 0;
     char cmd[2] = { key_len, val_len };
     struct iovec iov[3] = {
         { .iov_base = cmd, .iov_len = 2 },
@@ -212,7 +211,7 @@ static int kvdb_load(struct kvdb* kvdb, const char* src, bool force)
                 continue;
 
             size_t key_len = strlen(key) + 1;
-            if (!force && kvdb_get(kvdb, key, key_len, NULL) >= 0)
+            if (!force && kvdb_get(kvdb, key, key_len, NULL, 0) >= 0)
                 continue;
 
             kvdb_set(kvdb, key, key_len, value, strlen(value) + 1, true);
@@ -299,10 +298,9 @@ static void kvdb_unbind(int fd[])
 }
 
 #ifdef CONFIG_KVDB_DUMPLIST
-static int kvdb_list_consume(const char* key, size_t key_len,
-    const char* value, size_t val_len,
-    void* cookie)
+static void kvdb_list_consume(const char* key, const void* value, size_t val_len, void* cookie)
 {
+    size_t key_len = strlen(key) + 1;
     char cmd[2] = {
         key_len, val_len
     };
@@ -318,8 +316,7 @@ static int kvdb_list_consume(const char* key, size_t key_len,
     msg.msg_iovlen = 3;
 
     int fd = (intptr_t)cookie;
-    int ret = sendmsg(fd, &msg, 0);
-    return ret > 0 ? 0 : ret;
+    sendmsg(fd, &msg, 0);
 }
 #endif
 
@@ -377,7 +374,7 @@ static bool kvdb_client(kvdb_server* server, int fd)
             int32_t err = kvdb_delete(server->kvdb, key, key_len);
             if (err >= 0) {
                 dirty = true;
-                kvdb_monitor_notify(server, key, NULL);
+                kvdb_monitor_notify(server, key, NULL, 0);
             }
             send(fd, &err, 4, 0);
         }
@@ -385,15 +382,16 @@ static bool kvdb_client(kvdb_server* server, int fd)
     }
     case 'G': {
         size_t key_len = (unsigned char)msg[1];
-        size_t end_pos = key_len + 2;
+        size_t val_len = (unsigned char)msg[2];
+        size_t end_pos = key_len + 3;
         if (end_pos >= PROP_MSG_MAX)
             break;
 
-        const char* key = msg + 2;
+        const char* key = msg + 3;
         char value[PROP_VALUE_MAX];
         len = kvdb_recv(fd, msg, len, end_pos);
         if (len > 0) {
-            len = kvdb_get(server->kvdb, key, key_len, value);
+            len = kvdb_get(server->kvdb, key, key_len, value, val_len);
             if (len > 0)
                 send(fd, value, len, 0);
         }
@@ -413,7 +411,7 @@ static bool kvdb_client(kvdb_server* server, int fd)
             int32_t err = kvdb_set(server->kvdb, key, key_len, value, val_len, false);
             if (err >= 0) {
                 dirty = true;
-                kvdb_monitor_notify(server, key, value);
+                kvdb_monitor_notify(server, key, value, val_len);
             }
             send(fd, &err, 4, 0);
         }

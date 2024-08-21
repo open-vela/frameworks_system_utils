@@ -57,14 +57,15 @@ int property_reload(void);
 /**
  * @brief Wait the monitored key until its value updated or key deleted
  * @param[in] key the monitored key string, support fnmatch pattern
+ * @param[in] the length of the newvalue
  * @param[in] timeout the wait timeout time (in milliseconds)
  * @param[out] newkey pointer to a string buffer to receive the key of
  *                    the updated/deleted value
  * @param[out] newvalue pointer to a string buffer to receive the updated
- *                      value or deleted value ('\0')
- * @return On success returns 0, -errno otherwise.
+ *                      value or deleted value
+ * @return On success returns the length of the value.
  */
-int property_wait(const char* key, char* newkey, char* newvalue, int timeout);
+ssize_t property_wait(const char* key, char* newkey, void* newvalue, size_t val_len, int timeout);
 
 /**
  * @brief Open a key monitor channel
@@ -76,13 +77,14 @@ int property_monitor_open(const char* key);
 /**
  * @brief Read the monitored key and value
  * @param[in] fd file descriptor returned by property_monitor_open()
+ * @param[in] the length of the newvalue
  * @param[out] newkey pointer to a string buffer to receive the key of
  *                    the updated/deleted value
  * @param[out] newvalue pointer to a string buffer to receive the updated
- *                      value or deleted value ('\0')
- * @return On success returns 0, -errno otherwise.
+ *                      value or deleted value
+ * @return On success returns the length of the value.
  */
-int property_monitor_read(int fd, char* newkey, char* newvalue);
+ssize_t property_monitor_read(int fd, char* newkey, void* newvalue, size_t val_len);
 
 /**
  * @brief Close a key monitor channel
@@ -137,6 +139,23 @@ int property_set_buffer_oneway(const char* key, const void* value, size_t size);
  */
 ssize_t property_get_buffer(const char* key, void* value, size_t size);
 
+/**
+ * @brief Saves a the specified length buffer to database.
+ * @param[in] key entry key string
+ * @param[in] value buffer value
+ * @param[in] value buffer size
+ * @return On success returns the array length, -errno otherwise.
+ */
+int property_set_binary(const char* key, const void* value, size_t val_len, bool oneway);
+ssize_t property_get_binary(const char* key, void* value, size_t val_len);
+
+/**
+ * @List all KVs in every database and calls callback function.
+ * @param[in] callback function
+ * @param[in] cookie data to pass to callback function
+ * @Returns 0 on success, <0 if all databases failed to open.
+ */
+int property_list_binary(void (*propfn)(const char* key, const void* value, size_t val_len, void* cookie), void* cookie);
 #if defined(__cplusplus)
 }
 #endif

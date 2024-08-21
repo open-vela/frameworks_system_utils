@@ -29,31 +29,18 @@
 #include "internal.h"
 
 /****************************************************************************
- * Private Functions
- ****************************************************************************/
-
-static int kvdb_list_consume(const char* key, size_t key_len, const char* value, size_t val_len, void* cookie)
-{
-    UNUSED(key_len);
-    UNUSED(val_len);
-
-    printf("%s: %s\n", key, value);
-    return 0;
-}
-
-/****************************************************************************
  * Public Functions
  ****************************************************************************/
 
 /****************************************************************************
- * Name: property_set
+ * Name: property_set_binary
  *
  * Description:
  *   Store Key-Values to unqlite backend or nvs backend.
  *
  * Input Parameters:
  *   const char* key: entry key string
- *   const char* value: entry value string
+ *   const void* value: entry value string
  *
  * Returned Value:
  *         0: success
@@ -61,19 +48,16 @@ static int kvdb_list_consume(const char* key, size_t key_len, const char* value,
  *
  ****************************************************************************/
 
-int property_set_(const char* key, const char* value, bool oneway)
+int property_set_binary(const char* key, const void* value, size_t val_len, bool oneway)
 {
     if (!key)
         return -EINVAL;
-    if (!value)
-        value = "";
 
     size_t key_len = strlen(key) + 1;
     if (key_len > PROP_NAME_MAX)
         return -E2BIG;
 
-    size_t val_len = strlen(value) + 1;
-    if (val_len > PROP_VALUE_MAX)
+    if (val_len == 0 || val_len >= PROP_VALUE_MAX)
         return -E2BIG;
 
     struct kvdb* client;
@@ -82,64 +66,44 @@ int property_set_(const char* key, const char* value, bool oneway)
         return ret;
 
     ret = kvdb_set(client, key, key_len, value, val_len, false);
-    if (ret < 0)
-        goto out;
-
-    kvdb_uninit(client);
-    return ret;
-
-out:
     kvdb_uninit(client);
     return ret;
 }
 
 /****************************************************************************
- * Name: property_get
+ * Name: property_get_binary
  *
  * Description:
- *   Retrieve Key-Values from unqlite backend or nvs backend.
+ *   Retrieve Key-Values from database.
  *
  * Input Parameters:
  *   const char* key: entry key string
- *   char* value: not NULL : pointer to string buffer
+ *   void* value: not NULL : pointer to string buffer
  *                NULL     : check whether this [key, value] exists
- *   const char* default_value: the value to return on failure
  *
  * Returned Value:
  *   On success returns the length of the value which will never be greater
- *   than PROP_NAME_MAX - 1 and will always be zero terminated.
- *   (the length does not include the terminating zero).
- *   On failure returns length of default_value.
+ *   than PROP_NAME_MAX.
  *
  ****************************************************************************/
 
-int property_get(const char* key, char* value, const char* default_value)
+ssize_t property_get_binary(const char* key, void* value, size_t val_len)
 {
     if (!key)
-        goto out;
+        return -E2BIG;
 
     size_t key_len = strlen(key) + 1;
     if (key_len > PROP_NAME_MAX)
-        goto out;
+        return -E2BIG;
 
     struct kvdb* client;
     int ret = kvdb_init(&client);
     if (ret < 0)
         return ret;
 
-    int val_len = kvdb_get(client, key, key_len, value);
-    if (val_len <= 0 || value[--val_len])
-        goto out;
-
+    ssize_t len = kvdb_get(client, key, key_len, value, val_len);
     kvdb_uninit(client);
-    return val_len;
-
-out:
-    kvdb_uninit(client);
-    if (!value || !default_value)
-        return -EINVAL;
-    strcpy(value, default_value);
-    return strlen(default_value);
+    return len;
 }
 
 /****************************************************************************
@@ -166,19 +130,20 @@ int property_delete(const char* key)
     if (key_len > PROP_NAME_MAX)
         return -E2BIG;
 
+    /* in environment variable? */
+    if (getenv(key)) {
+        int ret = unsetenv(key);
+        if (ret < 0)
+            ret = -errno;
+        return ret;
+    }
+
     struct kvdb* client;
     int ret = kvdb_init(&client);
     if (ret < 0)
         return ret;
 
     ret = kvdb_delete(client, key, key_len);
-    if (ret < 0)
-        goto out;
-
-    kvdb_uninit(client);
-    return ret;
-
-out:
     kvdb_uninit(client);
     return ret;
 }
@@ -198,25 +163,14 @@ out:
  *
  ****************************************************************************/
 
-int property_list(void (*propfn)(const char* key, const char* value, void* cookie), void* cookie)
+int property_list_binary(void (*propfn)(const char* key, const void* value, size_t val_len, void* cookie), void* cookie)
 {
-    UNUSED(propfn);
-
     struct kvdb* client;
     int ret = kvdb_init(&client);
     if (ret < 0)
         return ret;
 
-    kvdb_consume consume = kvdb_list_consume;
-
-    ret = kvdb_list(client, consume, cookie);
-    if (ret < 0)
-        goto out;
-
-    kvdb_uninit(client);
-    return ret;
-
-out:
+    ret = kvdb_list(client, propfn, cookie);
     kvdb_uninit(client);
     return ret;
 }

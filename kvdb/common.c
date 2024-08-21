@@ -32,8 +32,24 @@
 #include "internal.h"
 
 /****************************************************************************
+ * Private Types
+ ****************************************************************************/
+
+struct property_list_arg {
+    void* cookie;
+    void (*propfn)(const char* key, const char* value, void* cookie);
+};
+
+/****************************************************************************
  * Private Functions
  ****************************************************************************/
+
+static void property_list_fn(const char* key, const void* value, size_t val_len, void* cookie)
+{
+    struct property_list_arg* list = (struct property_list_arg*)cookie;
+    *((char*)value + val_len) = '\0';
+    list->propfn(key, value, list->cookie);
+}
 
 static inline char nibble2ascii(unsigned char nibble)
 {
@@ -70,9 +86,128 @@ int kvdb_get_index(const char* key)
     }
 }
 
+/****************************************************************************
+ * Name: property_set_
+ *
+ * Description:
+ *   Store Key-Values to database.
+ *
+ * Input Parameters:
+ *   const char* key: entry key string
+ *   const char* value: entry value string
+ *
+ * Returned Value:
+ *         0: success
+ *        <0: failure during execution
+ *
+ ****************************************************************************/
+
+static int property_set_(const char* key, const char* value, bool oneway)
+{
+    if (!value)
+        value = "";
+
+    /* in environment variable? */
+    if (getenv(key)) {
+        int ret = setenv(key, value, 1);
+        if (ret < 0)
+            ret = -errno;
+        return ret;
+    }
+
+    return property_set_binary(key, value, strlen(value) + 1, oneway);
+}
+
+/****************************************************************************
+ * Name: property_set
+ *
+ * Description:
+ *   Store Key-Values to database.
+ *
+ * Input Parameters:
+ *   const char* key: entry key string
+ *   const char* value: entry value string
+ *
+ * Returned Value:
+ *         0: success
+ *        <0: failure during execution
+ *
+ ****************************************************************************/
+
 int property_set(const char* key, const char* value)
 {
     return property_set_(key, value, false);
+}
+
+/****************************************************************************
+ * Name: property_get
+ *
+ * Description:
+ *   Retrieve Key-Values from database.
+ *
+ * Input Parameters:
+ *   const char* key: entry key string
+ *   char* value: not NULL : pointer to string buffer
+ *                NULL     : check whether this [key, value] exists
+ *   const char* default_value: the value to return on failure
+ *
+ * Returned Value:
+ *   On success returns the length of the value which will never be greater
+ *   than PROP_NAME_MAX - 1 and will always be zero terminated.
+ *   (the length does not include the terminating zero).
+ *   On failure returns length of default_value.
+ *
+ ****************************************************************************/
+
+int property_get(const char* key, char* value, const char* default_value)
+{
+    /* in environment variable? */
+    const char* env = getenv(key);
+    if (env) {
+        size_t len = strlen(env);
+        if (len >= PROP_VALUE_MAX)
+            return -E2BIG;
+
+        if (value)
+            memcpy(value, env, len + 1);
+
+        return len;
+    }
+
+    ssize_t ret = property_get_binary(key, value, PROP_VALUE_MAX);
+    if (ret <= 0) {
+        if (!default_value)
+            return -EINVAL;
+        size_t len = strlen(default_value);
+        if (value)
+            memcpy(value, default_value, len + 1);
+        return len;
+    }
+    *(value + ret) = '\0';
+    return strlen(value);
+}
+
+/****************************************************************************
+ * Name: property_list
+ *
+ * Description:
+ *   List all KVs in every database and calls callback function.
+ *
+ * Input Parameters:
+ *   property_callback propfn: callback function
+ *   void* cookie: cookie data to pass to callback function
+ *
+ * Returned Value:
+ *   Returns 0 on success, <0 if all databases failed to open.
+ *
+ ****************************************************************************/
+
+int property_list(void (*propfn)(const char* key, const char* value, void* cookie), void* cookie)
+{
+    struct property_list_arg list;
+    list.cookie = cookie;
+    list.propfn = propfn;
+    return property_list_binary(property_list_fn, &list);
 }
 
 int property_set_oneway(const char* key, const char* value)

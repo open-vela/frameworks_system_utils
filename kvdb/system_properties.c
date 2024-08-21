@@ -15,18 +15,17 @@
  */
 
 #include <errno.h>
-#include <time.h>
+#include <kvdb.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdatomic.h>
+#include <time.h>
 #include <unistd.h>
-
-#include <kvdb.h>
 
 #include <sys/system_properties.h>
 
 struct system_property_foreach_cookie {
-    void *__cookie;
+    void* __cookie;
     void (*__callback)(const prop_info* __pi, void* __cookie);
 };
 
@@ -93,12 +92,11 @@ static void __system_property_foreach_callback(const char* key, const char* valu
  *
  * This method is for inspecting and debugging the property system, and not generally useful.
  */
-int __system_property_foreach(void (*__callback)(const prop_info* __pi, void* __cookie),
-                              void* __cookie)
+int __system_property_foreach(void (*__callback)(const prop_info* __pi, void* __cookie), void* __cookie)
 {
     struct system_property_foreach_cookie cookie;
     cookie.__callback = __callback;
-    cookie.__cookie   = __cookie;
+    cookie.__cookie = __cookie;
     return property_list(__system_property_foreach_callback, &cookie);
 }
 
@@ -114,11 +112,10 @@ int __system_property_foreach(void (*__callback)(const prop_info* __pi, void* __
  * Returns true and updates `*new_serial_ptr` on success, or false if the call
  * timed out.
  */
-bool __system_property_wait(const prop_info* __pi, uint32_t __old_serial, uint32_t* __new_serial_ptr,
-                            const struct timespec* __relative_timeout)
+bool __system_property_wait(const prop_info* __pi, uint32_t __old_serial, uint32_t* __new_serial_ptr, const struct timespec* __relative_timeout)
 {
     int timems = __relative_timeout->tv_sec * 1000 + __relative_timeout->tv_nsec / 1000000;
-    int ret = property_wait(__pi ? (const char*)__pi : "*", NULL, NULL, timems);
+    int ret = property_wait(__pi ? (const char*)__pi : "*", NULL, NULL, 0, timems);
     if (ret >= 0) {
         if (__new_serial_ptr)
             *__new_serial_ptr = __system_property_serial_num;

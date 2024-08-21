@@ -48,7 +48,7 @@ static bool unqlite_kv_is_exist(unqlite* db, const char* key, size_t key_len)
     return unqlite_kv_fetch(db, key, key_len, NULL, NULL) >= 0;
 }
 
-int kvdb_set(struct kvdb* kvdb, const char* key, size_t key_len, const char* value, size_t val_len, bool force)
+int kvdb_set(struct kvdb* kvdb, const char* key, size_t key_len, const void* value, size_t val_len, bool force)
 {
     if (--key_len >= PROP_NAME_MAX)
         return -E2BIG;
@@ -56,19 +56,8 @@ int kvdb_set(struct kvdb* kvdb, const char* key, size_t key_len, const char* val
     if (!key || key[key_len])
         return -EINVAL;
 
-    if (--val_len >= PROP_VALUE_MAX)
+    if (val_len >= PROP_VALUE_MAX)
         return -E2BIG;
-
-    if (value[val_len])
-        return -EINVAL;
-
-    /* in environment variable? */
-    if (getenv(key)) {
-        int ret = setenv(key, value, 1);
-        if (ret < 0)
-            ret = -errno;
-        return ret;
-    }
 
     /* no, then try database  */
     int i = kvdb_get_index(key);
@@ -78,10 +67,10 @@ int kvdb_set(struct kvdb* kvdb, const char* key, size_t key_len, const char* val
     if (!force && kvdb_is_readonly(key) && unqlite_kv_is_exist(kvdb->db[i], key, key_len + 1))
         return -EPERM;
 
-    return unqlite_kv_store(kvdb->db[i], key, ++key_len, value, ++val_len);
+    return unqlite_kv_store(kvdb->db[i], key, ++key_len, value, val_len);
 }
 
-int kvdb_get(struct kvdb* kvdb, const char* key, size_t key_len, char* value)
+ssize_t kvdb_get(struct kvdb* kvdb, const char* key, size_t key_len, void* value, size_t val_len)
 {
     if (--key_len >= PROP_NAME_MAX)
         return -E2BIG;
@@ -89,30 +78,17 @@ int kvdb_get(struct kvdb* kvdb, const char* key, size_t key_len, char* value)
     if (key[key_len])
         return -EINVAL;
 
-    /* in environment variable? */
-    const char* env = getenv(key);
-    if (env) {
-        size_t len = strlen(env) + 1;
-        if (len > PROP_VALUE_MAX)
-            return -E2BIG;
-
-        if (value)
-            memcpy(value, env, len);
-
-        return len;
-    }
-
     /* no, then try database  */
     int i = kvdb_get_index(key);
     if (i < 0)
         return i;
 
-    unqlite_int64 val_size = value ? PROP_VALUE_MAX : 0;
+    unqlite_int64 val_size = val_len;
     int ret = unqlite_kv_fetch(kvdb->db[i], key, ++key_len, value, &val_size);
     if (ret < 0)
         return ret;
 
-    if ((val_size <= 0) || (value && value[val_size - 1]))
+    if (val_size <= 0)
         return -EINVAL;
 
     return val_size;
@@ -129,14 +105,6 @@ int kvdb_delete(struct kvdb* kvdb, const char* key, size_t key_len)
     if (kvdb_is_readonly(key))
         return -EPERM;
 
-    /* in environment variable? */
-    if (getenv(key)) {
-        int ret = unsetenv(key);
-        if (ret < 0)
-            ret = -errno;
-        return ret;
-    }
-
     /* no, then try database  */
     int i = kvdb_get_index(key);
     if (i < 0)
@@ -148,7 +116,8 @@ int kvdb_delete(struct kvdb* kvdb, const char* key, size_t key_len)
 static int kvdb_list_value(const void* value, unsigned int len, void* arg)
 {
     kvdb_consume_data* data = arg;
-    return data->consume(data->key, data->key_len, value, len, data->cookie);
+    data->consume(data->key, value, len, data->cookie);
+    return 0;
 }
 
 static int kvdb_list_key(const void* value, unsigned int len, void* arg)

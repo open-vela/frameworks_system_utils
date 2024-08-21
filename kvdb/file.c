@@ -42,7 +42,7 @@ static void kvdb_file_genpath(const char* path, const char* key, char* filepath)
  * kvdb_file_set
  ****************************************************************************/
 
-static int kvdb_file_set(const char* path, const char* key, const char* value, size_t val_len)
+static int kvdb_file_set(const char* path, const char* key, const void* value, size_t val_len)
 {
     char filepath[PATH_MAX];
     ssize_t nbyteswrite = 0;
@@ -83,7 +83,7 @@ static int kvdb_file_set(const char* path, const char* key, const char* value, s
  * kvdb_file_get
  ****************************************************************************/
 
-static int kvdb_file_get(const char* path, const char* key, char* value)
+static ssize_t kvdb_file_get(const char* path, const char* key, void* value, size_t val_len)
 {
     char filepath[PATH_MAX];
     ssize_t nbytesread = 0;
@@ -98,7 +98,7 @@ static int kvdb_file_get(const char* path, const char* key, char* value)
     }
 
     do {
-        result = read(fd, value + nbytesread, PROP_VALUE_MAX - nbytesread);
+        result = read(fd, value + nbytesread, val_len - nbytesread);
         if (result < 0) {
             if (result == -EINTR) {
                 continue;
@@ -110,7 +110,7 @@ static int kvdb_file_get(const char* path, const char* key, char* value)
         }
 
         nbytesread += result;
-    } while (result > 0 && nbytesread < PROP_VALUE_MAX);
+    } while (result > 0 && nbytesread < val_len);
 
     close(fd);
     return nbytesread;
@@ -138,12 +138,12 @@ static int kvdb_file_list(const char* path, kvdb_consume consume, void* cookie)
             continue;
         }
 
-        ret = kvdb_file_get(path, entry->d_name, value);
+        ret = kvdb_file_get(path, entry->d_name, value, PROP_VALUE_MAX);
         if (ret < 0) {
             return ret;
         }
 
-        consume(entry->d_name, strlen(entry->d_name) + 1, value, ret, cookie);
+        consume(entry->d_name, value, ret, cookie);
     }
 
     closedir(dir);
@@ -223,7 +223,7 @@ void kvdb_uninit(struct kvdb* kvdb)
  ****************************************************************************/
 
 int kvdb_set(struct kvdb* kvdb, const char* key, size_t key_len,
-    const char* value, size_t val_len, bool force)
+    const void* value, size_t val_len, bool force)
 {
     int ret;
 
@@ -253,13 +253,14 @@ int kvdb_set(struct kvdb* kvdb, const char* key, size_t key_len,
  *   key     - Pointer to key to get.
  *   key_len - the length of the key
  *   value   - Pointer to data to be get
+ *   val_len - the length of the value
  *
  * Returned Value:
  *   the length of value, > 0 on success, -ERRNO errno code if error.
  *
  ****************************************************************************/
 
-int kvdb_get(struct kvdb* kvdb, const char* key, size_t key_len, char* value)
+ssize_t kvdb_get(struct kvdb* kvdb, const char* key, size_t key_len, void* value, size_t val_len)
 {
     int ret;
 
@@ -273,10 +274,10 @@ int kvdb_get(struct kvdb* kvdb, const char* key, size_t key_len, char* value)
 
 #ifdef CONFIG_KVDB_TEMPORARY_PATH
     if (ret == KVDB_MEM) {
-        return kvdb_file_get(CONFIG_KVDB_TEMPORARY_PATH, key, value);
+        return kvdb_file_get(CONFIG_KVDB_TEMPORARY_PATH, key, value, val_len);
     }
 #endif
-    return kvdb_file_get(CONFIG_KVDB_PERSIST_PATH, key, value);
+    return kvdb_file_get(CONFIG_KVDB_PERSIST_PATH, key, value, val_len);
 }
 
 /****************************************************************************
