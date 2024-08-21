@@ -211,7 +211,7 @@ int32_t property_get_int32(const char* key, int32_t default_value)
     errno = 0;
     char* end;
     int32_t ret = strtol(value, &end, 0);
-    if (errno || *end)
+    if (errno || *end || value == end)
         return default_value;
 
     return ret;
@@ -278,7 +278,7 @@ int64_t property_get_int64(const char* key, int64_t default_value)
     errno = 0;
     char* end;
     int64_t ret = strtoll(value, &end, 0);
-    if (errno || *end)
+    if (errno || *end || value == end)
         return default_value;
 
     return ret;
