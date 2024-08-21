@@ -166,7 +166,7 @@ void kvdb_uninit(struct kvdb* kvdb)
  ****************************************************************************/
 
 int kvdb_set(struct kvdb* kvdb, const char* key, size_t key_len,
-    const char* value, size_t val_len, bool force)
+    const void* value, size_t val_len, bool force)
 {
     struct config_data_s data;
     int index;
@@ -209,13 +209,14 @@ int kvdb_set(struct kvdb* kvdb, const char* key, size_t key_len,
  *   key     - Pointer to key to get.
  *   key_len - the length of the key
  *   value   - Pointer to data to be get
+ *   val_len - the length of the value
  *
  * Returned Value:
  *   the length of value, > 0 on success, -ERRNO errno code if error.
  *
  ****************************************************************************/
 
-int kvdb_get(struct kvdb* kvdb, const char* key, size_t key_len, char* value)
+ssize_t kvdb_get(struct kvdb* kvdb, const char* key, size_t key_len, void* value, size_t val_len)
 {
     struct config_data_s data;
     int index;
@@ -235,7 +236,7 @@ int kvdb_get(struct kvdb* kvdb, const char* key, size_t key_len, char* value)
 
     strlcpy(data.name, key, sizeof(data.name));
     data.configdata = (uint8_t*)value;
-    data.len = PROP_VALUE_MAX;
+    data.len = val_len;
 
     ret = ioctl(kvdb->fd[index], CFGDIOC_GETCONFIG, &data);
     if (ret < 0) {
@@ -327,8 +328,7 @@ int kvdb_list(struct kvdb* kvdb, kvdb_consume consume, void* cookie)
 
         kvdb_add_prefix(key, sizeof(key), i, data.name);
 
-        consume(key, strlen(key) + 1,
-            (const char*)(data.configdata), data.len, cookie);
+        consume(key, data.configdata, data.len, cookie);
 
         while (1) {
             data.configdata = buf;
@@ -339,8 +339,7 @@ int kvdb_list(struct kvdb* kvdb, kvdb_consume consume, void* cookie)
 
             kvdb_add_prefix(key, sizeof(key), i, data.name);
 
-            consume(key, strlen(key) + 1,
-                (const char*)(data.configdata), data.len, cookie);
+            consume(key, data.configdata, data.len, cookie);
         }
     }
 

@@ -115,14 +115,15 @@ static int property_connect(void)
  ****************************************************************************/
 
 /****************************************************************************
- * Name: property_set
+ * Name: property_set_binary
  *
  * Description:
  *   Store Key-Values to database.
  *
  * Input Parameters:
  *   const char* key: entry key string
- *   const char* value: entry value string
+ *   const void* value: entry value string
+ *   size_t val_len: the length of the value
  *
  * Returned Value:
  *         0: success
@@ -130,21 +131,18 @@ static int property_connect(void)
  *
  ****************************************************************************/
 
-int property_set_(const char* key, const char* value, bool oneway)
+int property_set_binary(const char* key, const void* value, size_t val_len, bool oneway)
 {
     int fd;
 
     if (!key)
         return -EINVAL;
-    if (!value)
-        value = "";
 
     size_t key_len = strlen(key) + 1;
     if (key_len > PROP_NAME_MAX)
         return -E2BIG;
 
-    size_t val_len = strlen(value) + 1;
-    if (val_len > PROP_VALUE_MAX)
+    if (val_len == 0 || val_len >= PROP_VALUE_MAX)
         return -E2BIG;
 
 again:
@@ -154,11 +152,11 @@ again:
         return fd;
     }
 
-    /*-----------------------------------------*
-     | 1 |   1   |   1   | key_len |  val_len  |
-     |-----------------------------------------|
-     |'S'|key_len|val_len|[key'\0']|[value'\0']|
-     *-----------------------------------------*/
+    /*-------------------------------------*
+     | 1 |   1   |   1   | key_len |val_len|
+     |-------------------------------------|
+     |'S'|key_len|val_len|[key'\0']|[value]|
+     *-------------------------------------*/
 
     char cmd[3] = {
         'S', key_len, val_len
@@ -213,52 +211,50 @@ out:
 }
 
 /****************************************************************************
- * Name: property_get
+ * Name: property_get_binary
  *
  * Description:
  *   Retrieve Key-Values from database.
  *
  * Input Parameters:
  *   const char* key: entry key string
- *   char* value: not NULL : pointer to string buffer
+ *   void* value: not NULL : pointer to string buffer
  *                NULL     : check whether this [key, value] exists
- *   const char* default_value: the value to return on failure
+ *   size_t val_len: the length of the value
  *
  * Returned Value:
  *   On success returns the length of the value which will never be greater
- *   than PROP_NAME_MAX - 1 and will always be zero terminated.
- *   (the length does not include the terminating zero).
- *   On failure returns length of default_value.
+ *   than PROP_NAME_MAX.
  *
  ****************************************************************************/
 
-int property_get(const char* key, char* value, const char* default_value)
+ssize_t property_get_binary(const char* key, void* value, size_t val_len)
 {
     if (!key)
-        goto out;
+        return -EINVAL;
 
     size_t key_len = strlen(key) + 1;
     if (key_len > PROP_NAME_MAX)
-        goto out;
+        return -EINVAL;
 
     int fd = property_connect();
     if (fd < 0) {
         KVERR("connect failed, fd=%d\n", fd);
-        goto out;
+        return fd;
     }
 
-    /*---------------------*
-     | 1 |   1   | key_len |
-     | --------------------|
-     |'G'|key_len|[key'\0']|
-     *---------------------*/
+    /*-----------------------------*
+     | 1 |   1   | key_len |val_len|
+     | --------------------|-------|
+     |'G'|key_len|[key'\0']|[value]|
+     *-----------------------------*/
 
-    char cmd[2] = {
-        'G', key_len
+    char cmd[3] = {
+        'G', key_len, val_len
     };
 
     struct iovec iov[2] = {
-        { .iov_base = cmd, .iov_len = 2 },
+        { .iov_base = cmd, .iov_len = 3 },
         { .iov_base = (char*)key, .iov_len = key_len },
     };
 
@@ -269,52 +265,44 @@ int property_get(const char* key, char* value, const char* default_value)
     int ret = sendmsg(fd, &msg, 0);
     if (ret < 0) {
         KVERR("sendmsg failed, errno=%d\n", errno);
-        goto out_fd;
+        goto out;
     }
 
-    /*-----------*
-     |  val_len  |
-     |-----------|
-     |[value'\0']|
-     *-----------*/
+    /*-------*
+     |val_len|
+     |-------|
+     |[value]|
+     *-------*/
 
-    int val_len;
+    ssize_t len;
 
     if (value) {
         /* value is not NULL, receive all the value */
 
-        val_len = recv(fd, value, PROP_VALUE_MAX, 0);
-        if (val_len <= 0 || value[--val_len]) {
-            if (val_len != 0) {
-                KVERR("recv failed, val_len=%d\n", val_len);
+        len = recv(fd, value, val_len, 0);
+        if (len <= 0) {
+            if (len != 0) {
+                KVERR("recv failed, len=%d\n", len);
             }
-            goto out_fd;
+            goto out;
         }
     } else {
         /* value is NULL, receive two chars to check whether this
          * [key, value] exists
          */
 
-        char tmpvalue[2];
-        val_len = recv(fd, tmpvalue, 2, 0);
-        if (val_len <= 0) {
-            if (val_len != 0) {
-                KVERR("recv failed, val_len=%d\n", val_len);
+        char tmpvalue[1];
+        len = recv(fd, tmpvalue, 1, 0);
+        if (len <= 0) {
+            if (len != 0) {
+                KVERR("recv failed, len=%d\n", len);
             }
-            goto out_fd;
         }
     }
 
-    close(fd);
-    return val_len;
-
-out_fd:
-    close(fd);
 out:
-    if (!value || !default_value)
-        return -EINVAL;
-    strcpy(value, default_value);
-    return strlen(default_value);
+    close(fd);
+    return len < 0 ? -errno : len;
 }
 
 /****************************************************************************
@@ -340,6 +328,14 @@ int property_delete(const char* key)
     size_t key_len = strlen(key) + 1;
     if (key_len > PROP_NAME_MAX)
         return -E2BIG;
+
+    /* in environment variable? */
+    if (getenv(key)) {
+        int ret = unsetenv(key);
+        if (ret < 0)
+            ret = -errno;
+        return ret;
+    }
 
     int fd = property_connect();
     if (fd < 0) {
@@ -395,7 +391,7 @@ out:
 }
 
 /****************************************************************************
- * Name: property_list
+ * Name: property_list_binary
  *
  * Description:
  *   List all KVs in every database and calls callback function.
@@ -409,7 +405,7 @@ out:
  *
  ****************************************************************************/
 
-int property_list(void (*propfn)(const char* key, const char* value, void* cookie), void* cookie)
+int property_list_binary(void (*propfn)(const char* key, const void* value, size_t val_len, void* cookie), void* cookie)
 {
     char* msg = NULL;
 
@@ -440,11 +436,11 @@ int property_list(void (*propfn)(const char* key, const char* value, void* cooki
     }
 
     while (1) {
-        /*-------------------------------------*
-         |   1   |   1   | key_len |  val_len  |
-         |-------------------------------------|
-         |key_len|val_len|[key'\0']|[value'\0']|
-         *-------------------------------------*/
+        /*---------------------------------*
+         |   1   |   1   | key_len |val_len|
+         |---------------------------------|
+         |key_len|val_len|[key'\0']|[value]|
+         *---------------------------------*/
 
         ret = recv_safe(fd, msg, 0, 2);
         if (ret < 0) {
@@ -464,7 +460,7 @@ int property_list(void (*propfn)(const char* key, const char* value, void* cooki
             continue;
 
         size_t val_len = (unsigned char)msg[1];
-        if (val_len > PROP_VALUE_MAX)
+        if (val_len >= PROP_VALUE_MAX)
             continue;
 
         size_t total = key_len + val_len + 2;
@@ -475,11 +471,11 @@ int property_list(void (*propfn)(const char* key, const char* value, void* cooki
         }
 
         const char* key = msg + 2;
-        const char* value = key + key_len;
-        if (key[key_len - 1] || value[val_len - 1])
+        void* value = msg + 2 + key_len;
+        if (key[key_len - 1])
             continue;
 
-        propfn(key, value, cookie);
+        propfn(key, value, val_len, cookie);
     }
 
 out:
@@ -498,16 +494,17 @@ out:
  *   const char* key     : the monitored key string, support fnmatch pattern
  *   char*       newkey  : pointer to a string buffer to receive the key of
  *                         the updated/deleted value
- *   char*       newvalue: pointer to a string buffer to receive the updated
- *                         value or deleted value ('\0')
+ *   void*       newvalue: pointer to a string buffer to receive the updated
+ *                         value or deleted value
+ *   size_t      val_len : the length of the newvalue
  *   int         timeout : the wait timeout time (in milliseconds)
  *
  * Returned Value:
- *   On success returns 0, -errno otherwise.
+ *   On success returns the length of the value.
  *
  ****************************************************************************/
 
-int property_wait(const char* key, char* newkey, char* newvalue, int timeout)
+ssize_t property_wait(const char* key, char* newkey, void* newvalue, size_t val_len, int timeout)
 {
     if (key == NULL)
         return -EINVAL;
@@ -531,7 +528,7 @@ int property_wait(const char* key, char* newkey, char* newvalue, int timeout)
         goto out;
     }
 
-    ret = property_monitor_read(fd, newkey, newvalue);
+    ret = property_monitor_read(fd, newkey, newvalue, val_len);
 
 out:
     property_monitor_close(fd);
@@ -627,15 +624,16 @@ out:
  *   int   fd      : file descriptor returned by property_monitor_open()
  *   char* newkey  : pointer to a strint buffer to receive the key of the
  *                   updated/deleted value
- *   char* newvalue: pointer to a string buffer to receive the updated
- *                   value or deleted value ('\0')
+ *   void* newvalue: pointer to a string buffer to receive the updated
+ *                   value or deleted value
+ *   size_t val_len: newvalue length
  *
  * Returned Value:
- *   On success returns 0, -errno otherwise.
+ *   On success returns the length of the value.
  *
  ****************************************************************************/
 
-int property_monitor_read(int fd, char* newkey, char* newvalue)
+ssize_t property_monitor_read(int fd, char* newkey, void* newvalue, size_t val_len)
 {
     char* msg = malloc(PROP_MSG_MAX);
     if (msg == NULL) {
@@ -656,13 +654,13 @@ int property_monitor_read(int fd, char* newkey, char* newvalue)
         return -E2BIG;
     }
 
-    size_t val_len = (unsigned char)msg[1];
-    if (val_len > PROP_VALUE_MAX) {
+    size_t len = (unsigned char)msg[1];
+    if (len > PROP_VALUE_MAX) {
         free(msg);
         return -E2BIG;
     }
 
-    size_t total = key_len + val_len + 2;
+    size_t total = key_len + len + 2;
     ret = recv_safe(fd, msg, ret, total);
     if (ret < 0) {
         KVERR("recv_safe failed, ret=%d\n", ret);
@@ -675,28 +673,19 @@ int property_monitor_read(int fd, char* newkey, char* newvalue)
         strlcpy(newkey, key, PROP_NAME_MAX);
 
     if (newvalue != NULL) {
-        if (val_len == 0) {
-            /*-------------------------*
-            |   1   |   1   | key_len |
-            |-------------------------|
-            |key_len|   0   |[key'\0']|
-            *-------------------------*/
+        /*--------------------------------*
+         |   1   |   1   | key_len |val_len|
+         |---------------------------------|
+         |key_len|val_len|[key'\0']|[value]|
+         *---------------------------------*/
 
-            newvalue[0] = '\0';
-        } else {
-            /*-------------------------------------*
-            |   1   |   1   | key_len |  val_len  |
-            |-------------------------------------|
-            |key_len|val_len|[key'\0']|[value'\0']|
-            *-------------------------------------*/
-
-            const char* value = &msg[2 + key_len];
-            strlcpy(newvalue, value, PROP_VALUE_MAX);
-        }
+        const void* value = &msg[2 + key_len];
+        len = val_len > len ? len : val_len;
+        memcpy(newvalue, value, len);
     }
 
     free(msg);
-    return 0;
+    return len;
 }
 
 /****************************************************************************
