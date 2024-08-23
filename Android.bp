@@ -1,6 +1,5 @@
 cc_defaults {
   name: "kvdb_defaults",
-  proprietary: true,
 
   static_libs: [
     "libkvdb",
@@ -30,15 +29,13 @@ cc_library_headers {
 }
 
 cc_binary {
-    name: "propset",
+    name: "kvset",
     srcs: ["kvdb/setprop.c"],
     defaults: ["kvdb_defaults"],
-    proprietary: true,
 }
 
 cc_binary {
-    name: "propget",
+    name: "kvget",
     srcs: ["kvdb/getprop.c"],
     defaults: ["kvdb_defaults"],
-    proprietary: true,
 }
