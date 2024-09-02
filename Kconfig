@@ -114,10 +114,8 @@ choice
 config KVDB_UNQLITE
 	bool "UNQLITE"
 	depends on UNQLITE
-	depends on FS_LOCK_BUCKET_SIZE > 0
 	---help---
-		Configure the unqlite database to store Key-value. File locks are used in unqlite
-		mode. Set FS_LOCK_BUCKET_SIZE to a nonzero value
+		Configure the unqlite database to store Key-value.
 
 config KVDB_NVS
 	bool "NVS"
