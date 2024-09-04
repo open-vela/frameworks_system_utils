@@ -130,6 +130,11 @@ config KVDB_NVS
 	---help---
 		Configure using Non-Volatile Storage to store Key-value
 
+config KVDB_FILE
+	bool "FILE"
+	---help---
+	Configure using file to store Key-value
+
 endchoice
 
 config KVDB_PERSIST_PATH

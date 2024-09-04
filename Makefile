@@ -57,6 +57,8 @@ CSRCS += kvdb/nvs.c
 else ifneq ($(CONFIG_KVDB_UNQLITE),)
 CFLAGS += ${INCDIR_PREFIX}$(APPDIR)/external/unqlite/unqlite
 CSRCS += kvdb/unqlite.c
+else ifneq ($(CONFIG_KVDB_FILE),)
+CSRCS += kvdb/file.c
 endif # CONFIG_KVDB_NVS
 
 PRIORITY  = $(CONFIG_KVDB_PRIORITY)
