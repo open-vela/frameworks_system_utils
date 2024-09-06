@@ -247,7 +247,7 @@ int property_set_int64(const char* key, int64_t value)
 
 int property_set_int64_oneway(const char* key, int64_t value)
 {
-    return property_set_int64_(key, value, false);
+    return property_set_int64_(key, value, true);
 }
 
 /****************************************************************************
