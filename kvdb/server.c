@@ -193,7 +193,7 @@ static int kvdb_load(struct kvdb* kvdb, const char* src, bool force)
 
         /* Wait filesystem mount success */
         while (access(path, 0) < 0 && retry-- > 0)
-            usleep(10);
+            usleep(1000);
 
         FILE* f = fopen(path, "re");
         if (!f) {
