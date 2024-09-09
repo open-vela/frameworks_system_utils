@@ -67,6 +67,12 @@ config KVDB_STACKSIZE
 	int "stack size"
 	default 4096
 
+config KVDB_DUMPLIST
+	bool "KVDB dump list"
+	default y
+	---help---
+		Kvd will dump all key-value when use getprop without key
+
 config KVDB_SERVER
 	bool "KVDB server"
 	default n

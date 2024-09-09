@@ -20,10 +20,12 @@
 
 #include <kvdb.h>
 
+#ifdef CONFIG_KVDB_DUMPLIST
 static void callback(const char* name, const char* value, void* cookie)
 {
     printf("%s: %s\n", name, value);
 }
+#endif
 
 int main(int argc, char* argv[])
 {
@@ -35,8 +37,11 @@ int main(int argc, char* argv[])
             printf("%s\n", buf);
         else
             ret = EINVAL;
-    } else if (argc == 1)
+    }
+#ifdef CONFIG_KVDB_DUMPLIST
+    else if (argc == 1)
         ret = -property_list(callback, NULL);
+#endif
     else
         printf("Usage: %s [key]\n", argv[0]);
 
