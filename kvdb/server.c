@@ -29,15 +29,16 @@
 
 #include "internal.h"
 
+#if defined(CONFIG_NET_LOCAL) && defined(CONFIG_NET_RPMSG)
 #define KVFD_LOCAL 0
 #define KVFD_REMOTE 1
-#define KVFD_MAX 8
-
-#ifdef CONFIG_NET_RPMSG
 #define KVFD_COUNT 2
 #else
+#define KVFD_LOCAL 0
+#define KVFD_REMOTE 0
 #define KVFD_COUNT 1
 #endif
+#define KVFD_MAX 8
 
 typedef struct kvdb_monitor {
     int fd;
@@ -230,16 +231,20 @@ static int kvdb_load(struct kvdb* kvdb, const char* src, bool force)
 static int kvdb_bind(int fd[])
 {
     const int family[] = {
+#ifdef CONFIG_NET_LOCAL
         [KVFD_LOCAL] = AF_UNIX,
+#endif
 #ifdef CONFIG_NET_RPMSG
         [KVFD_REMOTE] = AF_RPMSG,
 #endif
     };
 
+#ifdef CONFIG_NET_LOCAL
     const struct sockaddr_un addr0 = {
         .sun_family = AF_UNIX,
         .sun_path = PROP_SERVER_PATH,
     };
+#endif
 
 #ifdef CONFIG_NET_RPMSG
     const struct sockaddr_rpmsg addr1 = {
@@ -250,14 +255,18 @@ static int kvdb_bind(int fd[])
 #endif
 
     const struct sockaddr* addr[] = {
+#ifdef CONFIG_NET_LOCAL
         [KVFD_LOCAL] = (const struct sockaddr*)&addr0,
+#endif
 #ifdef CONFIG_NET_RPMSG
         [KVFD_REMOTE] = (const struct sockaddr*)&addr1,
 #endif
     };
 
     const socklen_t addrlen[] = {
+#ifdef CONFIG_NET_LOCAL
         [KVFD_LOCAL] = sizeof(struct sockaddr_un),
+#endif
 #ifdef CONFIG_NET_RPMSG
         [KVFD_REMOTE] = sizeof(struct sockaddr_rpmsg),
 #endif
@@ -289,6 +298,7 @@ static void kvdb_unbind(int fd[])
             close(fd[i]);
 }
 
+#ifdef CONFIG_KVDB_DUMPLIST
 static int kvdb_list_consume(const char* key, size_t key_len,
     const char* value, size_t val_len,
     void* cookie)
@@ -311,6 +321,7 @@ static int kvdb_list_consume(const char* key, size_t key_len,
     int ret = sendmsg(fd, &msg, 0);
     return ret > 0 ? 0 : ret;
 }
+#endif
 
 static ssize_t kvdb_recv(int sockfd, char* buf, size_t offset, size_t len)
 {
@@ -408,11 +419,13 @@ static bool kvdb_client(kvdb_server* server, int fd)
         }
         break;
     }
+#ifdef CONFIG_KVDB_DUMPLIST
     case 'L': {
         kvdb_list(server->kvdb, kvdb_list_consume, (void*)(uintptr_t)fd);
         send(fd, "\0", 2, 0); /* terminator */
         break;
     }
+#endif
     case 'C': {
         int ret = kvdb_commit(server->kvdb);
         send(fd, &ret, sizeof(ret), 0);
@@ -460,7 +473,7 @@ static void kvdb_loop(kvdb_server* server)
         return;
 
     for (int i = 0; i < KVFD_COUNT; i++) {
-        if (server->fd[i] > 0) {
+        if (server->fd[i] >= 0) {
             evs[0].data.ptr = &server->fd[i];
             evs[0].events = EPOLLIN;
             if (epoll_ctl(server->efd, EPOLL_CTL_ADD, server->fd[i], &evs[0]) < 0) {
