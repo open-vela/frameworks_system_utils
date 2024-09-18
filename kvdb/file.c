@@ -45,7 +45,7 @@ static void kvdb_file_genpath(const char* path, const char* key, char* filepath)
 static int kvdb_file_set(const char* path, const char* key, const void* value, size_t val_len)
 {
     char filepath[PATH_MAX];
-    ssize_t nbyteswrite = 0;
+    size_t nbyteswrite = 0;
     ssize_t result;
     int fd;
 
@@ -86,7 +86,7 @@ static int kvdb_file_set(const char* path, const char* key, const void* value, s
 static ssize_t kvdb_file_get(const char* path, const char* key, void* value, size_t val_len)
 {
     char filepath[PATH_MAX];
-    ssize_t nbytesread = 0;
+    size_t nbytesread = 0;
     ssize_t result;
     int fd;
 
