@@ -262,6 +262,7 @@ ssize_t property_get_binary(const char* key, void* value, size_t val_len)
     msg.msg_iov = iov;
     msg.msg_iovlen = 2;
 
+    ssize_t len = -1;
     int ret = sendmsg(fd, &msg, 0);
     if (ret < 0) {
         KVERR("sendmsg failed, errno=%d\n", errno);
@@ -273,8 +274,6 @@ ssize_t property_get_binary(const char* key, void* value, size_t val_len)
      |-------|
      |[value]|
      *-------*/
-
-    ssize_t len;
 
     if (value) {
         /* value is not NULL, receive all the value */
