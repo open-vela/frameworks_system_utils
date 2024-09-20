@@ -140,6 +140,7 @@ static int kvdb_file_list(const char* path, kvdb_consume consume, void* cookie)
 
         ret = kvdb_file_get(path, entry->d_name, value, PROP_VALUE_MAX);
         if (ret < 0) {
+            closedir(dir);
             return ret;
         }
 
