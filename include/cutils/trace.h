@@ -28,6 +28,7 @@
 extern "C" {
 #endif
 
+/* clang-format off */
 /**
  * The ATRACE_TAG macro can be defined before including this header to trace
  * using one of the tags defined below.  It must be defined to one of the
@@ -122,7 +123,9 @@ extern uint64_t atrace_enabled_tags;
 extern int atrace_marker_fd;
 
 /**
- * atrace_init readies the process for tracing by opening the trace_marker file.
+ * @brief atrace_init
+ *
+ * readies the process for tracing by opening the trace_marker file.
  * Calling any trace function causes this to be run, so calling it is optional.
  * This can be explicitly run to avoid setup delay on first trace function.
  */
@@ -133,9 +136,10 @@ void atrace_init(void);
 uint64_t atrace_get_enabled_tags(void);
 
 /**
- * Test if a given tag is currently enabled.
- * Returns nonzero if the tag is enabled, otherwise zero.
+ * @brief Test if a given tag is currently enabled.
+ *
  * It can be used as a guard condition around more expensive trace calculations.
+ * @return Returns nonzero if the tag is enabled, otherwise zero.
  */
 #define ATRACE_ENABLED() atrace_is_tag_enabled(ATRACE_TAG)
 static inline uint64_t atrace_is_tag_enabled(uint64_t tag)
@@ -144,8 +148,11 @@ static inline uint64_t atrace_is_tag_enabled(uint64_t tag)
 }
 
 /**
- * Trace the beginning of a context.  name is used to identify the context.
+ * @brief To indicate the beginning of tracing action
+ *
+ * Trace the beginning of a context.
  * This is often used to time function execution.
+ * @param[in] name is used to identify the context.
  */
 #define ATRACE_BEGIN(name) atrace_begin(ATRACE_TAG, name)
 static inline void atrace_begin(uint64_t tag, const char* name)
@@ -157,6 +164,8 @@ static inline void atrace_begin(uint64_t tag, const char* name)
 }
 
 /**
+ * @brief To indicate the end of tracing action
+ *
  * Trace the end of a context.
  * This should match up (and occur after) a corresponding ATRACE_BEGIN.
  */
@@ -170,11 +179,14 @@ static inline void atrace_end(uint64_t tag)
 }
 
 /**
+ * @brief To indicate the beginning of async tracing action
+ *
  * Trace the beginning of an asynchronous event. Unlike ATRACE_BEGIN/ATRACE_END
- * contexts, asynchronous events do not need to be nested. The name describes
- * the event, and the cookie provides a unique identifier for distinguishing
- * simultaneous events. The name and cookie used to begin an event must be
- * used to end it.
+ * contexts, asynchronous events do not need to be nested.
+ * @param[in] name   the name to describes the event
+ * @param[in] cookie using to provides a unique identifier for distinguishing
+ *                   simultaneous events. The name and cookie used to begin an
+ *                   event must be used to end it.
  */
 #define ATRACE_ASYNC_BEGIN(name, cookie) \
     atrace_async_begin(ATRACE_TAG, name, cookie)
@@ -188,8 +200,14 @@ static inline void atrace_async_begin(uint64_t tag, const char* name,
 }
 
 /**
+ * @brief To indicate the beginning of async tracing action
+ *
  * Trace the end of an asynchronous event.
  * This should have a corresponding ATRACE_ASYNC_BEGIN.
+ * @param[in] name   the name to describes the event
+ * @param[in] cookie using to provides a unique identifier for distinguishing
+ *                   simultaneous events. The name and cookie used to begin an
+ *                   event must be used to end it.
  */
 #define ATRACE_ASYNC_END(name, cookie) atrace_async_end(ATRACE_TAG, name, cookie)
 static inline void atrace_async_end(uint64_t tag, const char* name, int32_t cookie)
@@ -201,11 +219,17 @@ static inline void atrace_async_end(uint64_t tag, const char* name, int32_t cook
 }
 
 /**
- * Trace the beginning of an asynchronous event. In addition to the name and a
- * cookie as in ATRACE_ASYNC_BEGIN/ATRACE_ASYNC_END, a track name argument is
- * provided, which is the name of the row where this async event should be
- * recorded. The track name, name, and cookie used to begin an event must be
- * used to end it.
+ * @brief To indicate the beginning of async tracing action with trace info
+ *
+ * Trace the beginning of an asynchronous event.
+ * @param[in] trace_name the track name is the name of the row where this
+ *                       async event should be recorded. The track name,
+ *                       name, and cookie used to begin an event must be
+ *                       used to end it.
+ * @param[in] name       the name to describes the event
+ * @param[in] cookie     using to provides a unique identifier for distinguishing
+ *                       simultaneous events. The name and cookie used to begin an
+ *                       event must be used to end it.
  */
 #define ATRACE_ASYNC_FOR_TRACK_BEGIN(track_name, name, cookie) \
     atrace_async_for_track_begin(ATRACE_TAG, track_name, name, cookie)
@@ -218,8 +242,18 @@ static inline void atrace_async_for_track_begin(uint64_t tag, const char* track_
 }
 
 /**
+ * @brief To indicate the beginning of async tracing action with trace info
+ *
  * Trace the end of an asynchronous event.
  * This should correspond to a previous ATRACE_ASYNC_FOR_TRACK_BEGIN.
+ * @param[in] trace_name the track name is the name of the row where this
+ *                       async event should be recorded. The track name,
+ *                       name, and cookie used to begin an event must be
+ *                       used to end it.
+ * @param[in] name       the name to describes the event
+ * @param[in] cookie     using to provides a unique identifier for distinguishing
+ *                       simultaneous events. The name and cookie used to begin an
+ *                       event must be used to end it.
  */
 #define ATRACE_ASYNC_FOR_TRACK_END(track_name, name, cookie) \
     atrace_async_for_track_end(ATRACE_TAG, track_name, name, cookie)
@@ -232,13 +266,14 @@ static inline void atrace_async_for_track_end(uint64_t tag, const char* track_na
 }
 
 /**
- * Trace an instantaneous context. name is used to identify the context.
- *
+ * @brief To indicate trace an instantaneous context
  * An "instant" is an event with no defined duration. Visually is displayed like a single marker
  * in the timeline (rather than a span, in the case of begin/end events).
  *
  * By default, instant events are added into a dedicated track that has the same name of the event.
  * Use atrace_instant_for_track to put different instant events into the same timeline track/row.
+ *
+ * @param[in] name the value that using to identify the context
  */
 #define ATRACE_INSTANT(name) atrace_instant(ATRACE_TAG, name)
 static inline void atrace_instant(uint64_t tag, const char* name) {
@@ -249,11 +284,13 @@ static inline void atrace_instant(uint64_t tag, const char* name) {
 }
 
 /**
- * Trace an instantaneous context. name is used to identify the context.
- * track_name is the name of the row where the event should be recorded.
+ * @brief To indicate trace an instantaneous context with track specified
  *
  * An "instant" is an event with no defined duration. Visually is displayed like a single marker
  * in the timeline (rather than a span, in the case of begin/end events).
+ *
+ * @param[in] name       the name used to identify the context.
+ * @param[in] track_name is the name of the row where the event should be recorded.
  */
 #define ATRACE_INSTANT_FOR_TRACK(trackName, name) \
     atrace_instant_for_track(ATRACE_TAG, trackName, name)
@@ -266,8 +303,10 @@ static inline void atrace_instant_for_track(uint64_t tag, const char* track_name
 }
 
 /**
- * Traces an integer counter value.  name is used to identify the counter.
- * This can be used to track how a value changes over time.
+ * @brief To indicate trace an integer counter value
+ *
+ * @param[in] name  is used to identify the counter.
+ * @param[in] velue this can be used to track how a value changes over time.
  */
 #define ATRACE_INT(name, value) atrace_int(ATRACE_TAG, name, value)
 static inline void atrace_int(uint64_t tag, const char* name, int32_t value)
@@ -279,8 +318,10 @@ static inline void atrace_int(uint64_t tag, const char* name, int32_t value)
 }
 
 /**
- * Traces a 64-bit integer counter value.  name is used to identify the
- * counter. This can be used to track how a value changes over time.
+ * @brief To indicate trace an 64-bit integer counter value
+ *
+ * @param[in] name  is used to identify the counter.
+ * @param[in] value This can be used to track how a value changes over time.
  */
 #define ATRACE_INT64(name, value) atrace_int64(ATRACE_TAG, name, value)
 static inline void atrace_int64(uint64_t tag, const char* name, int64_t value)
@@ -291,6 +332,7 @@ static inline void atrace_int64(uint64_t tag, const char* name, int64_t value)
     }
 }
 
+/* clang-format on */
 #ifdef __cplusplus
 }
 #endif

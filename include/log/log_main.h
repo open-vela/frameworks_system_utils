@@ -25,6 +25,7 @@
 extern "C" {
 #endif
 
+/* clang-format off */
 /*
  * Normally we strip the effects of ALOGV (VERBOSE messages),
  * LOG_FATAL and LOG_FATAL_IF (FATAL assert messages) from the
@@ -202,8 +203,8 @@ extern int __fake_use_va_args(int, ...);
 
 /* --------------------------------------------------------------------- */
 
-/*
- * Simplified macro to send a verbose log message using the current LOG_TAG.
+/**
+ * @brief Simplified macro to send a verbose log message using the current LOG_TAG.
  */
 #ifndef ALOGV
 #define ALOGV(...) ((void)ALOG(LOG_VERBOSE, LOG_TAG, __VA_ARGS__))
@@ -216,8 +217,8 @@ extern int __fake_use_va_args(int, ...);
             : ((void)0))
 #endif
 
-/*
- * Simplified macro to send a debug log message using the current LOG_TAG.
+/**
+ * @brief Simplified macro to send a debug log message using the current LOG_TAG.
  */
 #ifndef ALOGD
 #define ALOGD(...) ((void)ALOG(LOG_DEBUG, LOG_TAG, __VA_ARGS__))
@@ -230,8 +231,8 @@ extern int __fake_use_va_args(int, ...);
             : ((void)0))
 #endif
 
-/*
- * Simplified macro to send an info log message using the current LOG_TAG.
+/**
+ * @brief Simplified macro to send an info log message using the current LOG_TAG.
  */
 #ifndef ALOGI
 #define ALOGI(...) ((void)ALOG(LOG_INFO, LOG_TAG, __VA_ARGS__))
@@ -244,8 +245,8 @@ extern int __fake_use_va_args(int, ...);
             : ((void)0))
 #endif
 
-/*
- * Simplified macro to send a warning log message using the current LOG_TAG.
+/**
+ * @brief Simplified macro to send a warning log message using the current LOG_TAG.
  */
 #ifndef ALOGW
 #define ALOGW(...) ((void)ALOG(LOG_WARN, LOG_TAG, __VA_ARGS__))
@@ -258,8 +259,8 @@ extern int __fake_use_va_args(int, ...);
             : ((void)0))
 #endif
 
-/*
- * Simplified macro to send an error log message using the current LOG_TAG.
+/**
+ * @brief Simplified macro to send an error log message using the current LOG_TAG.
  */
 #ifndef ALOGE
 #define ALOGE(...) ((void)ALOG(LOG_ERROR, LOG_TAG, __VA_ARGS__))
@@ -274,40 +275,40 @@ extern int __fake_use_va_args(int, ...);
 
 /* --------------------------------------------------------------------- */
 
-/*
- * Conditional based on whether the current LOG_TAG is enabled at
+/**
+ * @brief Conditional based on whether the current LOG_TAG is enabled at
  * verbose priority.
  */
 #ifndef IF_ALOGV
 #define IF_ALOGV() IF_ALOG(LOG_VERBOSE, LOG_TAG)
 #endif
 
-/*
- * Conditional based on whether the current LOG_TAG is enabled at
+/**
+ * @brief Conditional based on whether the current LOG_TAG is enabled at
  * debug priority.
  */
 #ifndef IF_ALOGD
 #define IF_ALOGD() IF_ALOG(LOG_DEBUG, LOG_TAG)
 #endif
 
-/*
- * Conditional based on whether the current LOG_TAG is enabled at
+/**
+ * @brief Conditional based on whether the current LOG_TAG is enabled at
  * info priority.
  */
 #ifndef IF_ALOGI
 #define IF_ALOGI() IF_ALOG(LOG_INFO, LOG_TAG)
 #endif
 
-/*
- * Conditional based on whether the current LOG_TAG is enabled at
+/**
+ * @brief Conditional based on whether the current LOG_TAG is enabled at
  * warn priority.
  */
 #ifndef IF_ALOGW
 #define IF_ALOGW() IF_ALOG(LOG_WARN, LOG_TAG)
 #endif
 
-/*
- * Conditional based on whether the current LOG_TAG is enabled at
+/**
+ * @brief Conditional based on whether the current LOG_TAG is enabled at
  * error priority.
  */
 #ifndef IF_ALOGE
@@ -411,6 +412,7 @@ int __android_log_is_loggable_len(int prio, const char* tag, size_t len, int def
 #pragma clang diagnostic pop
 #endif
 
+/* clang-format off */
 #ifdef __cplusplus
 }
 #endif
