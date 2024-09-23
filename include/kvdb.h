@@ -18,6 +18,7 @@
 #define __KVDB_H
 
 #include <cutils/properties.h>
+#include <sys/types.h>
 
 #define PROP_MSG_MAX (3 + PROP_NAME_MAX + PROP_VALUE_MAX) /* +3 = +1(opcode) +2(len) */
 
