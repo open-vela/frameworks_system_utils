@@ -66,53 +66,91 @@
 extern "C" {
 #endif
 
+/* clang-format off */
 /**
- * Android log priority values, in increasing order of priority.
+ * @brief Android log priority values, in increasing order of priority.
+ * 
+ * In Vela, we could using the CONFIG_ALOG to control the default log filter level
  */
 typedef enum android_LogPriority {
-  /** For internal use only.  */
+  /**
+   * @brief For internal use only.
+   */
   ANDROID_LOG_UNKNOWN = 0,
-  /** The default priority, for internal use only.  */
-  ANDROID_LOG_DEFAULT, /* only for SetMinPriority() */
-  /** Verbose logging. Should typically be disabled for a release apk. */
+  /**
+   * @brief The default priority, for internal use only.
+   * only for SetMinPriority()
+   */
+  ANDROID_LOG_DEFAULT,
+  /**
+   * @brief Verbose logging. Should typically be disabled for a release apk.
+   */
   ANDROID_LOG_VERBOSE,
-  /** Debug logging. Should typically be disabled for a release apk. */
+  /**
+   * @brief Debug logging. Should typically be disabled for a release apk.
+   */
   ANDROID_LOG_DEBUG,
-  /** Informational logging. Should typically be disabled for a release apk. */
+  /**
+   * @brief Informational logging. Should typically be disabled for a release apk.
+   */
   ANDROID_LOG_INFO,
-  /** Warning logging. For use with recoverable failures. */
+  /**
+   * @brief Warning logging. For use with recoverable failures.
+   */
   ANDROID_LOG_WARN,
-  /** Error logging. For use with unrecoverable failures. */
+  /**
+   * @brief Error logging. For use with unrecoverable failures.
+   */
   ANDROID_LOG_ERROR,
-  /** Fatal logging. For use when aborting. */
+  /**
+   * @brief Fatal logging. For use when aborting.
+   */
   ANDROID_LOG_FATAL,
-  /** For internal use only.  */
-  ANDROID_LOG_SILENT, /* only for SetMinPriority(); must be last */
+  /**
+   * @brief For internal use only.
+   * only for SetMinPriority(); must be last
+   */
+  ANDROID_LOG_SILENT,
 } android_LogPriority;
 
 /**
- * Writes the constant string `text` to the log, with priority `prio` and tag
+ * @brief Writes the constant string `text` to the log, with priority `prio` and tag
  * `tag`.
+ * @param[in] prio the log filter level
+ * @param[in] tag  the tag using to trace and filter log info
+ * @param[in] text the detailed log content to print out or record
+ * @return return 0 on success, non-zero on failure
  */
 int __android_log_write(int prio, const char* tag, const char* text);
 
 /**
- * Writes a formatted string to the log, with priority `prio` and tag `tag`.
+ * @brief Writes a formatted string to the log, with priority `prio` and tag `tag`.
  * The details of formatting are the same as for
  * [printf(3)](http://man7.org/linux/man-pages/man3/printf.3.html).
+ *
+ * @param[in] prio the log filter level
+ * @param[in] tag  the tag using to trace and filter log info
+ * @param[in] fmt  the formatted string
+ * @return return 0 on success, non-zero on failure
  */
 int __android_log_print(int prio, const char* tag, const char* fmt, ...)
     __attribute__((__format__(printf, 3, 4)));
 
 /**
- * Equivalent to `__android_log_print`, but taking a `va_list`.
+ * @brief Equivalent to `__android_log_print`, but taking a `va_list`.
  * (If `__android_log_print` is like `printf`, this is like `vprintf`.)
+ *
+ * @param[in] prio the log filter level
+ * @param[in] tag  the tag using to trace and filter log info
+ * @param[in] fmt  the formatted string
+ * @param[in] ap   variadic list of all parameters
+ * @return return 0 on success, non-zero on failure
  */
 int __android_log_vprint(int prio, const char* tag, const char* fmt, va_list ap)
     __attribute__((__format__(printf, 3, 0)));
 
 /**
- * Writes an assertion failure to the log (as `ANDROID_LOG_FATAL`) and to
+ * @brief Writes an assertion failure to the log (as `ANDROID_LOG_FATAL`) and to
  * stderr, before calling
  * [abort(3)](http://man7.org/linux/man-pages/man3/abort.3.html).
  *
@@ -126,32 +164,53 @@ int __android_log_vprint(int prio, const char* tag, const char* fmt, va_list ap)
  * provided by bionic if more control is needed. They support automatically
  * including the source filename and line number more conveniently than this
  * function.
+ *
+ * @param[in] cond the string representation of assertion condition
+ * @param[in] tag  the tag using to trace and filter log info
+ * @param[in] fmt  the formatted string
+ * @return return 0 on success, non-zero on failure
  */
 void __android_log_assert(const char* cond, const char* tag, const char* fmt, ...)
     __attribute__((__noreturn__)) __attribute__((__format__(printf, 3, 4)));
 
 /**
- * Identifies a specific log buffer for __android_log_buf_write()
+ * @brief Identifies a specific log buffer for __android_log_buf_write()
  * and __android_log_buf_print().
  */
 typedef enum log_id {
   LOG_ID_MIN = 0,
 
-  /** The main log buffer. This is the only log buffer available to apps. */
+  /**
+   * @brief The main log buffer. This is the only log buffer available to apps.
+   */
   LOG_ID_MAIN = 0,
-  /** The radio log buffer. */
+  /**
+   * @brief The radio log buffer.
+   */
   LOG_ID_RADIO = 1,
-  /** The event log buffer. */
+  /**
+   * @brief The event log buffer.
+   */
   LOG_ID_EVENTS = 2,
-  /** The system log buffer. */
+  /**
+   * @brief The system log buffer.
+   */
   LOG_ID_SYSTEM = 3,
-  /** The crash log buffer. */
+  /**
+   * @brief The crash log buffer.
+   */
   LOG_ID_CRASH = 4,
-  /** The statistics log buffer. */
+  /**
+   * @brief The statistics log buffer.
+   */
   LOG_ID_STATS = 5,
-  /** The security log buffer. */
+  /**
+   * @brief The security log buffer.
+   */
   LOG_ID_SECURITY = 6,
-  /** The kernel log buffer. */
+  /**
+   * @brief The kernel log buffer.
+   */
   LOG_ID_KERNEL = 7,
 
   LOG_ID_MAX,
@@ -370,6 +429,7 @@ int32_t __android_log_get_minimum_priority(void) __INTRODUCED_IN(30);
  */
 void __android_log_set_default_tag(const char* tag) __INTRODUCED_IN(30);
 
+/* clang-format on */
 #ifdef __cplusplus
 }
 #endif
