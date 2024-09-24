@@ -105,15 +105,65 @@ typedef void (*GDBusMessageFunction)(DBusConnection* connection,
 typedef gboolean (*GDBusSignalFunction)(DBusConnection* connection,
     DBusMessage* message, void* user_data);
 
-DBusConnection* dbus_setup_bus(DBusBusType type, const char* name,
-    DBusError* error);
+/**
+ * @brief Set and connect to the specified DBus bus type
+ *
+ * @param type the type of DBus bus, which can be DBUS_BUS_SESSION or DBUS_BUS_SYSTEM
+ * @param name The name of the DBus bus to connect to
+ * @param error A DBusError structure used to store error information
+ *
+ * @return If successful, returns a pointer to DBusConnection; if failed, returns NULL
+ */
+DBusConnection* dbus_setup_bus(DBusBusType type, const char* name, DBusError* error);
 
-DBusConnection* dbus_setup_private(DBusBusType type, const char* name,
-    DBusError* error);
+/**
+ * @brief Set up a private DBus connection
+ *
+ * This function is used to set up a private DBus connection. It accepts a DBusBusType
+ * parameter that specifies the type of connection (session or system), a string parameter
+ * that is the name of the DBus you want to connect to, and a DBusError pointer to store
+ * any error information that may occur.
+ * If the function succeeds, it returns a pointer to a DBusConnection, otherwise it returns NULL.
+ *
+ * @param type The type of DBus connection, which can be DBUS_BUS_SESSION or DBUS_BUS_SYSTEM
+ * @param name The name of the DBus you want to connect to
+ * @param error A DBusError structure used to store error information
+ * @return Returns a DBusConnection pointer on success, or NULL on failure
+ */
+DBusConnection* dbus_setup_private(DBusBusType type, const char* name, DBusError* error);
 
-gboolean dbus_request_name(DBusConnection* connection, const char* name,
-    DBusError* error);
+/**
+ * @brief Requests a specific D-Bus name on the specified DBus connection.
+ *
+ * @param connection Pointer to a DBusConnection object representing the connection for
+ * which the name is to be requested.
+ * @param name String of the D-Bus name to be requested.
+ * @param error Pointer to a DBusError object for storing possible errors that may occur
+ * during the name request.
+ *
+ * @return Returns a gboolean value of TRUE if the request succeeds or a gboolean value
+ * of FALSE if the request fails.
+ */
+gboolean dbus_request_name(DBusConnection* connection, const char* name, DBusError* error);
 
+/**
+ * @brief Set the disconnection function of the DBus connection
+ *
+ * This function is used to set the disconnection function of the DBus connection.
+ * This function will be called when the DBus connection is disconnected.
+ *
+ * @param connection Pointer to DBusConnection, indicating the DBus connection for which
+ * the disconnection function is to be set.
+ * @param function Pointer to GDBusWatchFunction, indicating the disconnection function
+ * to be set.
+ * @param user_data Pointer to any data. When the disconnection function is called, this
+ * data will be passed to the disconnection function.
+ * @param destroy Pointer to DBusFreeFunction, used to release the memory occupied by
+ * user_data when it is no longer needed.
+ *
+ * @return If the setting is successful, return a true value of type gboolean; otherwise,
+ * return a false value.
+ */
 gboolean dbus_set_disconnect_function(DBusConnection* connection,
     GDBusWatchFunction function,
     void* user_data, DBusFreeFunction destroy);
@@ -286,6 +336,31 @@ struct GDBusSecurityTable {
 void dbus_set_flags(int flags);
 int dbus_get_flags(void);
 
+/**
+ * @brief Register an interface on the specified DBus connection
+ *
+ * This function is used to register an interface on the specified DBus connection.
+ * It requires the following parameters:
+ * - connection: DBus connection object
+ * - path: path of DBus interface
+ * - name: name of DBus interface
+ * - methods: a GDBusMethodTable object containing methods of interface
+ * - signals: a GDBusSignalTable object containing signals of interface
+ * - properties: a GDBusPropertyTable object containing properties of interface
+ * - user_data: user data, which can be passed to callback function
+ * - destroy: a GDBusDestroyFunction, which is called when the interface is deregistered
+ * to clean up user data
+ *
+ * @param connection DBus connection object
+ * @param path path of DBus interface
+ * @param name name of DBus interface
+ * @param methods GDBusMethodTable object containing interface methods
+ * @param signals GDBusSignalTable object containing interface signals
+ * @param properties GDBusPropertyTable object containing interface properties
+ * @param user_data user data
+ * @param destroy GDBusDestroyFunction for cleaning up user data
+ * @return gboolean Returns TRUE if registration is successful, and FALSE if fails
+ */
 gboolean dbus_register_interface(DBusConnection* connection,
     const char* path, const char* name,
     const GDBusMethodTable* methods,
@@ -293,6 +368,17 @@ gboolean dbus_register_interface(DBusConnection* connection,
     const GDBusPropertyTable* properties,
     void* user_data,
     GDBusDestroyFunction destroy);
+
+/**
+ * @brief Unregister the specified interface from the specified DBus connection
+ *
+ * @param connection Pointer to DBusConnection, indicating the DBus connection of the
+ * interface to be unregistered
+ * @param path Path of the interface
+ * @param name Name of the interface
+ * @return If the interface is successfully unregistered, return gboolean TRUE, otherwise
+ * return FALSE
+ */
 gboolean dbus_unregister_interface(DBusConnection* connection,
     const char* path, const char* name);
 
@@ -318,10 +404,34 @@ DBusMessage* dbus_create_reply(DBusMessage* message, int type, ...);
 DBusMessage* dbus_create_reply_valist(DBusMessage* message,
     int type, va_list args);
 
+/**
+ * @brief Send a message to the specified DBus connection
+ *
+ * @param connection Pointer to the DBusConnection object, indicating the DBus connection
+ * to send the message
+ * @param message Pointer to the DBusMessage object, indicating the message to send
+ *
+ * @return If the sending is successful, return the gboolean type with a value of TRUE;
+ * if the sending fails, return the gboolean type with a value of FALSE
+ */
 gboolean dbus_send_message(DBusConnection* connection, DBusMessage* message);
-gboolean dbus_send_message_with_reply(DBusConnection* connection,
-    DBusMessage* message,
+
+/**
+ * @brief Send a message to the specified DBus connection and wait for a reply,
+ * non-blocking call
+ *
+ * @param connection Pointer to the DBusConnection object, indicating the DBus connection
+ * @param message Pointer to the DBusMessage object, indicating the message to be sent
+ * @param call Pointer to the pointer to the DBusPendingCall object, used to store the
+ * handle of the asynchronous call
+ * @param timeout Timeout for waiting for a reply after sending a message, in milliseconds
+ *
+ * @return If the message is successfully sent and the DBusPendingCall object instance is
+ * replied, the return value of the gboolean type is TRUE; otherwise, it returns FALSE
+ */
+gboolean dbus_send_message_with_reply(DBusConnection* connection, DBusMessage* message,
     DBusPendingCall** call, int timeout);
+
 gboolean dbus_send_error(DBusConnection* connection, DBusMessage* message,
     const char* name, const char* format, ...)
     __attribute__((format(printf, 4, 5)));
@@ -347,17 +457,59 @@ guint dbus_add_service_watch(DBusConnection* connection, const char* name,
 guint dbus_add_disconnect_watch(DBusConnection* connection, const char* name,
     GDBusWatchFunction function,
     void* user_data, GDBusDestroyFunction destroy);
+
+/**
+ * @brief Add a signal monitor to the DBus connection
+ *
+ * @param connection: Pointer to DBusConnection, indicating the DBus connection to which
+ * the signal monitor is to be added
+ * @param sender: The name of the DBus client that sends the signal. If it is NULL, the
+ * signals of all clients are monitored
+ * @param path: The path of the signal. If it is NULL, the signals of all paths are
+ * monitored
+ * @param interface: The interface of the signal. If it is NULL, the signals of all
+ * interfaces are monitored
+ * @param member: The member of the signal, that is, the specific name of the signal.
+ * If it is NULL, the signals of all members are monitored
+ * @param function: The function called when the signal is received receives the
+ * following parameters:
+ * - DBusConnection*: DBus connection
+ * - const char*: The sender of the signal
+ * - const char*: The path of the signal
+ * - const char*: The interface of the signal
+ * - const char*: The member of the signal
+ * - void*: User data
+ * @param user_data: User data, which will be passed to the function when calling the
+ * function
+ * @param destroy: The function called when the signal monitor is removed to destroy
+ * user_data. If it is NULL, no action is performed.
+ * @return: Returns an unsigned integer representing the ID of the newly created signal
+ * monitor.
+ */
 guint dbus_add_signal_watch(DBusConnection* connection,
     const char* sender, const char* path,
     const char* interface, const char* member,
     GDBusSignalFunction function, void* user_data,
     GDBusDestroyFunction destroy);
+
 guint dbus_add_properties_watch(DBusConnection* connection,
     const char* sender, const char* path,
     const char* interface,
     GDBusSignalFunction function, void* user_data,
     GDBusDestroyFunction destroy);
+
+/**
+ * @brief Remove a specific watch from the specified DBus connection
+ *
+ * @param connection Pointer to DBusConnection, indicating the connection from which the
+ * watch is to be removed
+ * @param tag Indicates the unique identifier of the watch to be removed
+ *
+ * @return gboolean The function returns TRUE if executed successfully, otherwise returns
+ * FALSE
+ */
 gboolean dbus_remove_watch(DBusConnection* connection, guint tag);
+
 void dbus_remove_all_watches(DBusConnection* connection);
 
 void dbus_pending_property_success(GDBusPendingPropertySet id);
@@ -390,15 +542,66 @@ gboolean dbus_detach_object_manager(DBusConnection* connection);
 typedef struct GDBusClient GDBusClient;
 typedef struct GDBusProxy GDBusProxy;
 
+/**
+ * @brief Create a new D-Bus proxy object
+ *
+ * This function is used to create a new D-Bus proxy object.
+ *
+ * @param client Pointer to the GDBusClient object, which is an instance of the
+ * D-Bus client.
+ * @param path The path of the D-Bus proxy.
+ * @param interface The name of the interface to be implemented by the D-Bus proxy.
+ *
+ * @return Returns a pointer to the GDBusProxy object if it was created successfully,
+ * otherwise returns NULL.
+ */
 GDBusProxy* dbus_proxy_new(GDBusClient* client, const char* path,
     const char* interface);
 
+/**
+ * @brief Increase the reference count of a D-Bus proxy
+ *
+ * This function increases the reference count of a given D-Bus proxy.
+ *
+ * @param proxy Pointer to the D-Bus proxy whose reference count is to be increased.
+ * @return Returns the pointer to the D-Bus proxy after the reference count is increased.
+ */
 GDBusProxy* dbus_proxy_ref(GDBusProxy* proxy);
+
+/**
+ * @brief Decrement the reference count of a D-Bus proxy
+ *
+ * This function decrements the reference count of a given D-Bus proxy. If the reference
+ * count reaches 0, the proxy will be released.
+ *
+ * @param proxy Pointer to the D-Bus proxy whose reference count is to be decremented.
+ */
 void dbus_proxy_unref(GDBusProxy* proxy);
 
+/**
+ * @brief Get the path of the D-Bus proxy
+ *
+ * @param proxy Pointer to GDBusProxy
+ * @return Return the path of the proxy
+ */
 const char* dbus_proxy_get_path(const GDBusProxy* proxy);
+
+/**
+ * @brief Get the interface of the D-Bus proxy
+ *
+ * @param proxy Pointer to GDBusProxy
+ * @return Return the interface of the proxy
+ */
 const char* dbus_proxy_get_interface(GDBusProxy* proxy);
 
+/**
+ * @brief Get the properties of the D-Bus proxy
+ *
+ * @param proxy Pointer to GDBusProxy
+ * @param name Name of the property
+ * @param iter Pointer to DBusMessageIter
+ * @return Returns whether the property was successfully obtained
+ */
 gboolean dbus_proxy_get_property(GDBusProxy* proxy, const char* name,
     DBusMessageIter* iter);
 
@@ -410,6 +613,25 @@ gboolean dbus_proxy_refresh_property(GDBusProxy* proxy, const char* name);
 
 typedef void (*GDBusResultFunction)(const DBusError* error, void* user_data);
 
+/**
+ * @brief This function is used to set the properties of a D-Bus proxy.
+ *
+ * @param proxy Pointer to GDBusProxy, indicating the proxy to set the properties.
+ * @param name The name of the property, which should be a string type.
+ * @param type The type of the property, which should be an integer, indicating the data
+ * type of the property.
+ * @param value Pointer to the value of the property, which should be a void type,
+ * indicating the value of the property.
+ * @param function Pointer to GDBusResultFunction, indicating the function to be executed
+ * after setting the property.
+ * @param user_data Pointer to user data, which will be passed when executing
+ * the @param function function.
+ * @param destroy Pointer to GDBusDestroyFunction, indicating how to destroy the data
+ * pointed to by value when the set property is no longer needed.
+ *
+ * @return Returns a true value of type gboolean if the property is successfully set;
+ * otherwise, returns a false value.
+ */
 gboolean dbus_proxy_set_property_basic(GDBusProxy* proxy,
     const char* name, int type, const void* value,
     GDBusResultFunction function, void* user_data,
@@ -432,6 +654,20 @@ void dbus_dict_append_array(DBusMessageIter* dict,
 typedef void (*GDBusSetupFunction)(DBusMessageIter* iter, void* user_data);
 typedef void (*GDBusReturnFunction)(DBusMessage* message, void* user_data);
 
+/**
+ * @brief Calls the specified @method method on the given D-Bus proxy
+ *
+ * @param proxy Pointer to GDBusProxy, indicating the D-Bus proxy to be called
+ * @param method The name of the method to be called
+ * @param setup A GDBusSetupFunction, used to set the parameters of the method call
+ * @param function A GDBusReturnFunction, called after the method call succeeds,
+ * returns the return value of the method
+ * @param user_data User data, passed to GDBusReturnFunction
+ * @param destroy A GDBusDestroyFunction, called after the method call is completed,
+ * used to clean up resources
+ *
+ * @return Returns gboolean if the method call succeeds, otherwise returns gboolean
+ */
 gboolean dbus_proxy_method_call(GDBusProxy* proxy, const char* method,
     GDBusSetupFunction setup,
     GDBusReturnFunction function, void* user_data,
@@ -445,38 +681,153 @@ typedef void (*GDBusPropertyFunction)(GDBusProxy* proxy, const char* name,
 typedef gboolean (*GDBusProxyFilterFunction)(GDBusClient* client, const char* path,
     const char* interface);
 
+/**
+ * @brief Sets a property monitor for the D-Bus proxy.
+ *
+ * @param proxy the GDBusProxy object which the property monitor is to be set.
+ * @param function Pointer to the callback function that handles property changes.
+ * @param user_data User data, which will be passed to the callback function.
+ * @return Returns TRUE if the monitor was successfully set, otherwise returns FALSE.
+ */
 gboolean dbus_proxy_set_property_watch(GDBusProxy* proxy,
     GDBusPropertyFunction function, void* user_data);
+
+/**
+ * @brief Removes a property monitor from a D-Bus proxy.
+ *
+ * @param proxy the GDBusProxy object whose property monitor is to be removed.
+ * @param destroy Pointer to a destruction function that handles user data.
+ * @return Returns TRUE if the monitor was successfully removed, otherwise returns FALSE.
+ */
 gboolean dbus_proxy_remove_property_watch(GDBusProxy* proxy,
     GDBusDestroyFunction destroy);
 
 gboolean dbus_proxy_set_removed_watch(GDBusProxy* proxy,
     GDBusProxyFunction destroy, void* user_data);
 
+/**
+ * @brief Create a new DBus client instance
+ *
+ * This function is used to create a new DBus client instance.
+ *
+ * @param connection Pointer to DBus connection.
+ * @param service Service name, used to identify DBus service.
+ * @param path Path, used to identify the path of DBus object.
+ *
+ * @return Returns a pointer to the newly created GDBusClient instance.
+ */
 GDBusClient* dbus_client_new(DBusConnection* connection,
     const char* service, const char* path);
+
 GDBusClient* dbus_client_new_full(DBusConnection* connection,
     const char* service,
     const char* path,
     const char* root_path);
 
+/**
+ * @brief Increase the reference count of the GDBusClient object.
+ *
+ * @param client The GDBusClient object whose reference count is to be increased.
+ * @return The GDBusClient object after the reference count is increased.
+ */
 GDBusClient* dbus_client_ref(GDBusClient* client);
+
+/**
+ * @brief Decrement the reference count of a GDBusClient object.
+ *
+ * @param client The GDBusClient object whose reference count is to be decremented.
+ */
 void dbus_client_unref(GDBusClient* client);
 
-gboolean dbus_client_set_connect_watch(GDBusClient* client,
-    GDBusWatchFunction function, void* user_data);
+/**
+ * @brief Set the connection monitoring function of the D-Bus client.
+ *
+ * @param client Pointer to the GDBusClient instance.
+ * @param function Pointer to the function of type GDBusWatchFunction, which will be
+ * called when there is a new D-Bus connection.
+ * @param user_data caller data, which will be passed to the caller when callback
+ * @return If the setting is successful, return a true value of type gboolean; otherwise,
+ * return a false value.
+ */
+gboolean dbus_client_set_connect_watch(GDBusClient* client, GDBusWatchFunction function,
+    void* user_data);
+
+/**
+ * @brief Set the disconnection monitoring function of the D-Bus client.
+ *
+ * @param client Pointer to the GDBusClient instance.
+ * @param function Pointer to the function of type GDBusWatchFunction, which will be
+ * called when the D-Bus connection is disconnected.
+ * @param user_data caller data will be passed to the caller when calling the function.
+ * @return If the setting is successful, return a true value of type gboolean; otherwise,
+ * return a false value.
+ */
 gboolean dbus_client_set_disconnect_watch(GDBusClient* client,
     GDBusWatchFunction function, void* user_data);
+
+/**
+ * @brief Set the signal monitoring function of the D-Bus client
+ *
+ * This function is used to set the signal monitoring function of the D-Bus client.
+ * When the client receives a D-Bus signal, the function will be called.
+ *
+ * @param client Pointer to the D-Bus client
+ * @param function Points to the function that processes the D-Bus signal
+ * @param user_data caller data will be passed to the caller when calling the function
+ *
+ * @return If the setting is successful, return gboolean as TRUE, otherwise return FALSE
+ */
 gboolean dbus_client_set_signal_watch(GDBusClient* client,
     GDBusMessageFunction function, void* user_data);
+
+/**
+ * @brief Set the preparation function and user data of the DBus client
+ *
+ * This function is used to set the preparation function and user data of the DBus client.
+ * The preparation function will be called when the DBus client is ready, and the user
+ * data can be passed to this function.
+ *
+ * @param client Pointer to the DBus client
+ * @param ready Preparation function, which will be called when the DBus client is ready
+ * @param user_data User data, which can be passed to the preparation function
+ *
+ * @return gboolean If the setting is successful, it returns TRUE, otherwise it returns FALSE
+ */
 gboolean dbus_client_set_ready_watch(GDBusClient* client,
     GDBusClientFunction ready, void* user_data);
+
+/**
+ * @brief Set the proxy handler function
+ *
+ * This function is used to set the proxy handler function of the D-Bus client.
+ *
+ * @param client Pointer to the GDBusClient instance.
+ * @param proxy_added Callback function when the proxy is added.
+ * @param proxy_removed Callback function when the proxy is removed.
+ * @param proxy_property_filter Callback function for proxy property filtering.
+ * @param property_changed Callback function when the property is changed.
+ * @param user_data caller data, which will be used in the callback function.
+ * @return If the setting is successful, the return gboolean is TRUE, otherwise
+ * it returns FALSE.
+ */
 gboolean dbus_client_set_proxy_handlers(GDBusClient* client,
     GDBusProxyFunction proxy_added,
     GDBusProxyFunction proxy_removed,
     GDBusProxyPropertyFilterFunction proxy_property_filter,
     GDBusPropertyFunction property_changed,
     void* user_data);
+
+/**
+ * @brief Set the proxy filter function
+ *
+ * This function is used to set the proxy filter function of the D-Bus client.
+ *
+ * @param client Pointer to the GDBusClient instance.
+ * @param proxy_filter Callback function of the proxy filter.
+ * @param user_data caller data, which will be used in the callback function.
+ * @return If the setting is successful, the return gboolean is TRUE, otherwise
+ * it returns FALSE.
+ */
 gboolean dbus_client_set_proxy_filter(GDBusClient* client,
     GDBusProxyFilterFunction proxy_filter,
     void* user_data);
