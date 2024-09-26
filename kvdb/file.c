@@ -129,7 +129,7 @@ static int kvdb_file_list(const char* path, kvdb_consume consume, void* cookie)
 
     dir = opendir(path);
     if (!dir) {
-        KVERR("opendir %s error with %d", dirname, errno);
+        KVERR("opendir %s error with %d", path, errno);
         return -errno;
     }
 
