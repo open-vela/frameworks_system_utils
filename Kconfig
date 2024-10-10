@@ -150,4 +150,11 @@ config KVDB_TEMPORARY_PATH
 
 endif # KVDB_DIRECT || KVDB_SERVER
 
+config KVDB_QEMU_PROPERTIES
+        tristate "Goldfish boot-properties service"
+        default n
+        depends on GOLDFISH_PIPE
+        ---help---
+                Enable the Goldfish boot-properties service
+
 endif # KVDB
