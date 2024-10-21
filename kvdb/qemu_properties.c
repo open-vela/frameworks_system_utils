@@ -121,6 +121,48 @@ qemud_channel_recv(int pipe, void* msg, int maxsize)
     return size;
 }
 
+static void
+misc_pipe_close(int* fd)
+{
+    if (*fd >= 0) {
+        close(*fd);
+        *fd = -1;
+    }
+}
+
+static void
+misc_pipe_send(int* fd, const char* msg)
+{
+    if (*fd < 0) {
+        *fd = qemu_pipe_open_ns(NULL, "QemuMiscPipe", O_RDWR);
+        if (*fd < 0) {
+            return;
+        }
+    }
+
+    int32_t cmd_len = strlen(msg) + 1;
+    write(*fd, &cmd_len, sizeof(cmd_len));
+    write(*fd, msg, cmd_len);
+
+    int r = read(*fd, &cmd_len, sizeof(cmd_len));
+    if (r < 0 || cmd_len < 0) {
+        misc_pipe_close(fd);
+        return;
+    }
+
+    while (cmd_len > 0) {
+        char buf[64];
+        const size_t chunk = cmd_len < sizeof(buf) ? cmd_len : sizeof(buf);
+        r = read(*fd, buf, chunk);
+        if (r < 0) {
+            misc_pipe_close(fd);
+            return;
+        } else {
+            cmd_len -= chunk;
+        }
+    }
+}
+
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
@@ -194,6 +236,23 @@ int main(void)
     }
 
     close(qemud_fd);
+
+    qemud_fd = -1;
+
+    do {
+        misc_pipe_send(&qemud_fd, "heartbeat");
+        sleep(5);
+        if (property_get_bool("vendor.qemu.dev.bootcomplete", 0)) {
+            fprintf(stderr, "tell the host boot completed\n");
+            misc_pipe_send(&qemud_fd, "bootcomplete");
+            break;
+        }
+    } while (qemud_fd >= 0);
+
+    while (qemud_fd >= 0) {
+        sleep(30);
+        misc_pipe_send(&qemud_fd, "heartbeat");
+    }
 
     return EXIT_SUCCESS;
 }
