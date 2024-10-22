@@ -100,14 +100,18 @@ static int property_connect(void)
     };
 #endif
 
-    int ret = connect(fd, (const struct sockaddr*)&addr, sizeof(addr));
-    if (ret < 0) {
-        ret = -errno;
-        close(fd);
-        return ret;
-    }
+    while (1) {
+        int ret = connect(fd, (const struct sockaddr*)&addr, sizeof(addr));
+        if (ret < 0 && errno != ENOENT) {
+            ret = -errno;
+            close(fd);
+            return ret;
+        } else if (ret == 0) {
+            return fd;
+        }
 
-    return fd;
+        usleep(1000);
+    }
 }
 
 /****************************************************************************
