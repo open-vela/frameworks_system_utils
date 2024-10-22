@@ -158,3 +158,5 @@ config KVDB_QEMU_PROPERTIES
                 Enable the Goldfish boot-properties service
 
 endif # KVDB
+
+osource "$APPSDIR/frameworks/system/utils/uv/Kconfig"

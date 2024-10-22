@@ -19,7 +19,9 @@ ${CONFIG_ANDROID_LIBBASE}\
 ${CONFIG_ATRACE}\
 ${CONFIG_LIB_DBUS}\
 ${CONFIG_KVDB},)
-CONFIGURED_APPS += $(APPDIR)/frameworks/utils
-CFLAGS += ${INCDIR_PREFIX}$(APPDIR)/frameworks/utils/include
-CXXFLAGS += ${INCDIR_PREFIX}$(APPDIR)/frameworks/utils/include
+CONFIGURED_APPS += $(APPDIR)/frameworks/system/utils
+CFLAGS += ${INCDIR_PREFIX}$(APPDIR)/frameworks/system/utils/include
+CXXFLAGS += ${INCDIR_PREFIX}$(APPDIR)/frameworks/system/utils/include
 endif
+
+-include $(APPDIR)/frameworks/system/utils/uv/Make.defs

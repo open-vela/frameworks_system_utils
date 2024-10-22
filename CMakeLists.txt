@@ -23,7 +23,7 @@ if(CONFIG_SCHED_INSTRUMENTATION_DUMP
     TARGET nuttx
     APPEND
     PROPERTY NUTTX_INCLUDE_DIRECTORIES
-             ${NUTTX_APPS_DIR}/frameworks/utils/include)
+             ${NUTTX_APPS_DIR}/frameworks/system/utils/include)
 
   set(CSRCS)
   set(CFLAGS)
