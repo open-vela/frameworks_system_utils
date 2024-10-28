@@ -230,6 +230,12 @@ int main(void)
         ++prop_value;
 
         fprintf(stderr, "key = %s | value = %s\n", prop_key, prop_value);
+
+        if (strcmp(prop_key, "qemu.sf.lcd_density") == 0) {
+            property_set("ro.sf.lcd_density", prop_value);
+            continue;
+        }
+
         if (property_set(prop_key, prop_value) < 0) {
             continue;
         }
