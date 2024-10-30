@@ -16,6 +16,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <uv_ext.h>
+
 #include <dbus/dbus-hash.h>
 #include <dbus/dbus-list.h>
 #include <dbus/dbus-string.h>
@@ -46,7 +48,6 @@ struct GDBusClient {
     guint removed_watch;
     struct ptr_array* match_rules;
     DBusPendingCall* pending_call;
-    DBusPendingCall* get_objects_call;
     GDBusWatchFunction connect_func;
     void* connect_data;
     GDBusWatchFunction disconn_func;
@@ -65,6 +66,9 @@ struct GDBusClient {
     void* user_data;
     DBusList* proxy_list;
     gboolean standard;
+    gboolean getting_object_call;
+    uv_async_queue_t async_queue;
+    uv_thread_t main_thread;
 };
 
 struct GDBusProxy {
@@ -79,9 +83,9 @@ struct GDBusProxy {
     void* prop_data;
     GDBusProxyFunction removed_func;
     void* removed_data;
-    DBusPendingCall* get_all_call;
     gboolean pending;
     gboolean filter_first;
+    gboolean getting_all_prop;
 };
 
 struct prop_entry {
@@ -89,6 +93,79 @@ struct prop_entry {
     int type;
     DBusMessage* msg;
 };
+
+struct pending_call_async {
+    DBusConnection* conn;
+    DBusMessage* msg;
+    int timeout;
+    DBusPendingCallNotifyFunction pending_reply;
+    void* user_data;
+    DBusFreeFunction destroy;
+};
+
+static gboolean dbus_send_msg_reply_pendingcall(DBusConnection* conn, DBusMessage* msg,
+    int timeout, DBusPendingCallNotifyFunction pending_reply,
+    void* user_data, DBusFreeFunction destroy)
+{
+    DBusPendingCall* pending_call = NULL;
+
+    if (dbus_send_message_with_reply(conn, msg, &pending_call, timeout) == FALSE) {
+        destroy(user_data);
+        return FALSE;
+    }
+
+    dbus_pending_call_set_notify(pending_call, pending_reply, user_data, destroy);
+    dbus_pending_call_unref(pending_call);
+
+    return TRUE;
+}
+
+static void dbus_send_msg_async_cb(uv_async_queue_t* async_queue, void* data)
+{
+    struct pending_call_async* handler = (struct pending_call_async*)data;
+
+    dbus_send_msg_reply_pendingcall(handler->conn, handler->msg, handler->timeout,
+        handler->pending_reply, handler->user_data, handler->destroy);
+    dbus_message_unref(handler->msg);
+    dbus_connection_unref(handler->conn);
+    free(handler);
+}
+
+static gboolean dbus_send_msg_reply_async(GDBusClient* client, DBusMessage* msg,
+    int timeout, DBusPendingCallNotifyFunction pending_reply,
+    void* user_data, DBusFreeFunction destroy)
+{
+    struct pending_call_async* handler;
+    uv_thread_t self_tid = uv_thread_self();
+
+    if (uv_thread_equal(&self_tid, &client->main_thread) != 0) {
+        return dbus_send_msg_reply_pendingcall(client->dbus_conn, msg, timeout,
+            pending_reply, user_data, destroy);
+    }
+
+    handler = calloc(1, sizeof(struct pending_call_async));
+    if (handler == NULL) {
+        return FALSE;
+    }
+
+    handler->conn = client->dbus_conn;
+    dbus_connection_ref(client->dbus_conn);
+    handler->msg = msg;
+    dbus_message_ref(msg);
+    handler->timeout = timeout;
+    handler->pending_reply = pending_reply;
+    handler->user_data = user_data;
+    handler->destroy = destroy;
+
+    if (uv_async_queue_send(&client->async_queue, (void*)handler) != 0) {
+        dbus_connection_unref(client->dbus_conn);
+        dbus_message_unref(msg);
+        free(handler);
+        return FALSE;
+    }
+
+    return TRUE;
+}
 
 static char* strdup0(const char* str)
 {
@@ -152,11 +229,10 @@ static void modify_match_reply(DBusPendingCall* call, void* user_data)
     dbus_message_unref(reply);
 }
 
-static gboolean modify_match(DBusConnection* conn, const char* member,
+static gboolean modify_match(GDBusClient* client, const char* member,
     const char* rule)
 {
     DBusMessage* msg;
-    DBusPendingCall* call;
 
     msg = dbus_message_new_method_call(DBUS_SERVICE_DBUS, DBUS_PATH_DBUS,
         DBUS_INTERFACE_DBUS, member);
@@ -166,18 +242,11 @@ static gboolean modify_match(DBusConnection* conn, const char* member,
     dbus_message_append_args(msg, DBUS_TYPE_STRING, &rule,
         DBUS_TYPE_INVALID);
 
-    if (dbus_send_message_with_reply(conn, msg, &call, -1) == FALSE) {
+    if (dbus_send_msg_reply_async(client, msg, -1, modify_match_reply, NULL, NULL)
+        == FALSE) {
         dbus_message_unref(msg);
         return FALSE;
     }
-
-    if (dbus_pending_call_get_completed(call)) {
-        modify_match_reply(call, NULL);
-    } else {
-        dbus_pending_call_set_notify(call, modify_match_reply, NULL, NULL);
-    }
-
-    dbus_pending_call_unref(call);
 
     dbus_message_unref(msg);
 
@@ -473,8 +542,7 @@ done:
 
     dbus_message_unref(reply);
 
-    dbus_pending_call_unref(proxy->get_all_call);
-    proxy->get_all_call = NULL;
+    proxy->getting_all_prop = FALSE;
 
     dbus_client_unref(client);
 }
@@ -485,7 +553,7 @@ static void get_all_properties(GDBusProxy* proxy)
     const char* service_name = client->service_name;
     DBusMessage* msg;
 
-    if (proxy->get_all_call)
+    if (proxy->getting_all_prop)
         return;
 
     msg = dbus_message_new_method_call(service_name, proxy->obj_path,
@@ -496,20 +564,13 @@ static void get_all_properties(GDBusProxy* proxy)
     dbus_message_append_args(msg, DBUS_TYPE_STRING, &proxy->interface,
         DBUS_TYPE_INVALID);
 
-    if (dbus_send_message_with_reply(client->dbus_conn, msg,
-            &proxy->get_all_call, -1)
+    if (dbus_send_msg_reply_async(client, msg, -1, get_all_properties_reply,
+            proxy, NULL)
         == FALSE) {
         dbus_message_unref(msg);
         return;
     }
-
-    if (dbus_pending_call_get_completed(proxy->get_all_call)) {
-        get_all_properties_reply(proxy->get_all_call, proxy);
-    } else {
-        dbus_pending_call_set_notify(proxy->get_all_call,
-            get_all_properties_reply, proxy, NULL);
-    }
-
+    proxy->getting_all_prop = TRUE;
     dbus_message_unref(msg);
 }
 
@@ -682,11 +743,7 @@ static void proxy_free(gpointer data)
     if (proxy->client) {
         GDBusClient* client = proxy->client;
 
-        if (proxy->get_all_call != NULL) {
-            dbus_pending_call_cancel(proxy->get_all_call);
-            dbus_pending_call_unref(proxy->get_all_call);
-            proxy->get_all_call = NULL;
-        }
+        proxy->getting_all_prop = FALSE;
 
         if (client->proxy_removed)
             client->proxy_removed(proxy, client->user_data);
@@ -766,7 +823,7 @@ GDBusProxy* dbus_proxy_new(GDBusClient* client, const char* path,
         return dbus_proxy_ref(proxy);
     }
 
-    if (!client->get_objects_call)
+    if (!client->getting_object_call)
         get_all_properties(proxy);
 
     return dbus_proxy_ref(proxy);
@@ -790,10 +847,7 @@ void dbus_proxy_unref(GDBusProxy* proxy)
     if (__sync_sub_and_fetch(&proxy->ref_count, 1) > 0)
         return;
 
-    if (proxy->get_all_call != NULL) {
-        dbus_pending_call_cancel(proxy->get_all_call);
-        dbus_pending_call_unref(proxy->get_all_call);
-    }
+    proxy->getting_all_prop = FALSE;
 
     _dbus_hash_table_unref(proxy->prop_list);
 
@@ -905,7 +959,6 @@ gboolean dbus_proxy_refresh_property(GDBusProxy* proxy, const char* name)
     GDBusClient* client;
     DBusMessage* msg;
     DBusMessageIter iter;
-    DBusPendingCall* call;
 
     if (proxy == NULL || name == NULL)
         return FALSE;
@@ -940,22 +993,13 @@ gboolean dbus_proxy_refresh_property(GDBusProxy* proxy, const char* name)
         &proxy->interface);
     dbus_message_iter_append_basic(&iter, DBUS_TYPE_STRING, &name);
 
-    if (dbus_send_message_with_reply(client->dbus_conn, msg, &call, -1)
+    if (dbus_send_msg_reply_async(client, msg, -1, refresh_property_reply,
+            data, refresh_property_free)
         == FALSE) {
         dbus_message_unref(msg);
         refresh_property_free(data);
         return FALSE;
     }
-
-    if (dbus_pending_call_get_completed(call)) {
-        refresh_property_reply(call, data);
-        refresh_property_free(data);
-    } else {
-        dbus_pending_call_set_notify(call, refresh_property_reply,
-            data, refresh_property_free);
-    }
-
-    dbus_pending_call_unref(call);
 
     dbus_message_unref(msg);
 
@@ -998,7 +1042,6 @@ gboolean dbus_proxy_set_property_basic(GDBusProxy* proxy,
     GDBusClient* client;
     DBusMessage* msg;
     DBusMessageIter iter;
-    DBusPendingCall* call;
 
     if (proxy == NULL || name == NULL || value == NULL)
         return FALSE;
@@ -1041,21 +1084,12 @@ gboolean dbus_proxy_set_property_basic(GDBusProxy* proxy,
 
     append_variant(&iter, type, value);
 
-    if (dbus_send_message_with_reply(client->dbus_conn, msg, &call, -1)
+    if (dbus_send_msg_reply_async(client, msg, -1, set_property_reply, data, free)
         == FALSE) {
         dbus_message_unref(msg);
         free(data);
         return FALSE;
     }
-
-    if (dbus_pending_call_get_completed(call)) {
-        set_property_reply(call, data);
-        free(data);
-    } else {
-        dbus_pending_call_set_notify(call, set_property_reply, data, free);
-    }
-
-    dbus_pending_call_unref(call);
 
     dbus_message_unref(msg);
 
@@ -1071,7 +1105,6 @@ gboolean dbus_proxy_set_property_array(GDBusProxy* proxy,
     GDBusClient* client;
     DBusMessage* msg;
     DBusMessageIter iter;
-    DBusPendingCall* call;
 
     if (!proxy || !name || !value)
         return FALSE;
@@ -1107,21 +1140,12 @@ gboolean dbus_proxy_set_property_array(GDBusProxy* proxy,
 
     append_array_variant(&iter, type, &value, size);
 
-    if (dbus_send_message_with_reply(client->dbus_conn, msg, &call, -1)
+    if (dbus_send_msg_reply_async(client, msg, -1, set_property_reply, data, free)
         == FALSE) {
         dbus_message_unref(msg);
         free(data);
         return FALSE;
     }
-
-    if (dbus_pending_call_get_completed(call)) {
-        set_property_reply(call, data);
-        free(data);
-    } else {
-        dbus_pending_call_set_notify(call, set_property_reply, data, free);
-    }
-
-    dbus_pending_call_unref(call);
 
     dbus_message_unref(msg);
 
@@ -1132,31 +1156,20 @@ struct method_call_data {
     GDBusReturnFunction function;
     void* user_data;
     GDBusDestroyFunction destroy;
-    bool reply_handled;
-    int ref_count;
 };
 
 static void method_call_reply(DBusPendingCall* call, void* user_data)
 {
     struct method_call_data* data = user_data;
-    if (!data->reply_handled && dbus_pending_call_get_completed(call)) {
-        data->reply_handled = true;
-        DBusMessage* reply = dbus_pending_call_steal_reply(call);
-        if (reply) {
-            if (data->function)
-                data->function(reply, data->user_data);
+    DBusMessage* reply = dbus_pending_call_steal_reply(call);
 
-            if (data->destroy)
-                data->destroy(data->user_data);
+    if (data->function)
+        data->function(reply, data->user_data);
 
-            dbus_message_unref(reply);
-            dbus_pending_call_unref(call);
-        }
-    }
+    if (data->destroy)
+        data->destroy(data->user_data);
 
-    data->ref_count--;
-    if (data->ref_count == 0)
-        free(data);
+    dbus_message_unref(reply);
 }
 
 gboolean dbus_proxy_method_call(GDBusProxy* proxy, const char* method,
@@ -1167,7 +1180,6 @@ gboolean dbus_proxy_method_call(GDBusProxy* proxy, const char* method,
     struct method_call_data* data;
     GDBusClient* client;
     DBusMessage* msg;
-    DBusPendingCall* call;
 
     if (proxy == NULL || method == NULL)
         return FALSE;
@@ -1198,26 +1210,13 @@ gboolean dbus_proxy_method_call(GDBusProxy* proxy, const char* method,
     data->function = function;
     data->user_data = user_data;
     data->destroy = destroy;
-    data->reply_handled = false;
-    data->ref_count = 1;
 
-    if (dbus_send_message_with_reply(client->dbus_conn, msg,
-            &call, METHOD_CALL_TIMEOUT)
+    if (dbus_send_msg_reply_async(client, msg, METHOD_CALL_TIMEOUT,
+            method_call_reply, data, free)
         == FALSE) {
         dbus_message_unref(msg);
         free(data);
         return FALSE;
-    }
-
-    if (dbus_pending_call_get_completed(call)) {
-        method_call_reply(call, data);
-    } else {
-        data->ref_count++;
-        dbus_pending_call_set_notify(call, method_call_reply, data, NULL);
-        if (dbus_pending_call_get_completed(call)) {
-            dbus_pending_call_cancel(call);
-            method_call_reply(call, data);
-        }
     }
 
     dbus_message_unref(msg);
@@ -1342,6 +1341,14 @@ static void get_properties_reply_not_standard(DBusPendingCall* call, void* user_
     DBusMessageIter array;
     DBusError error;
 
+    if (!proxy->getting_all_prop) {
+        /**
+         * not in getting prop process, do nothing for reply.
+         * maybe proxy already freed.
+         */
+        return;
+    }
+
     dbus_error_init(&error);
 
     if (dbus_set_error_from_message(&error, message)) {
@@ -1366,8 +1373,7 @@ out:
 
     dbus_error_free(&error);
     dbus_message_unref(message);
-    dbus_pending_call_unref(proxy->get_all_call);
-    proxy->get_all_call = NULL;
+    proxy->getting_all_prop = FALSE;
 }
 
 static gboolean get_properties_non_standard(GDBusClient* client)
@@ -1380,7 +1386,7 @@ static gboolean get_properties_non_standard(GDBusClient* client)
         DBusMessage* msg;
 
         proxy = list->data;
-        if (proxy->get_all_call)
+        if (proxy->getting_all_prop)
             continue;
 
         client = proxy->client;
@@ -1395,20 +1401,13 @@ static gboolean get_properties_non_standard(GDBusClient* client)
         if (msg == NULL)
             return FALSE;
 
-        if (dbus_send_message_with_reply(client->dbus_conn, msg,
-                &proxy->get_all_call, -1)
+        if (dbus_send_msg_reply_async(client, msg, -1,
+                get_properties_reply_not_standard, proxy, NULL)
             == FALSE) {
             dbus_message_unref(msg);
             return FALSE;
         }
-
-        if (dbus_pending_call_get_completed(proxy->get_all_call)) {
-            get_properties_reply_not_standard(proxy->get_all_call, proxy);
-        } else {
-            dbus_pending_call_set_notify(proxy->get_all_call,
-                get_properties_reply_not_standard, proxy, NULL);
-        }
-
+        proxy->getting_all_prop = TRUE;
         dbus_message_unref(msg);
     }
 
@@ -1515,6 +1514,14 @@ static void get_managed_objects_reply(DBusPendingCall* call, void* user_data)
     DBusMessage* reply = dbus_pending_call_steal_reply(call);
     DBusError error;
 
+    if (!client->getting_object_call) {
+        /**
+         * not in getting object process, do nothing for reply.
+         * maybe client already freed.
+         */
+        return;
+    }
+
     dbus_client_ref(client);
 
     dbus_error_init(&error);
@@ -1532,8 +1539,7 @@ done:
 
     dbus_message_unref(reply);
 
-    dbus_pending_call_unref(client->get_objects_call);
-    client->get_objects_call = NULL;
+    client->getting_object_call = FALSE;
 
     refresh_properties(client->proxy_list);
 
@@ -1552,7 +1558,7 @@ static void get_managed_objects(GDBusClient* client)
         return;
     }
 
-    if (client->get_objects_call != NULL)
+    if (client->getting_object_call)
         return;
 
     msg = dbus_message_new_method_call(client->service_name,
@@ -1564,21 +1570,13 @@ static void get_managed_objects(GDBusClient* client)
 
     dbus_message_append_args(msg, DBUS_TYPE_INVALID);
 
-    if (dbus_send_message_with_reply(client->dbus_conn, msg,
-            &client->get_objects_call, -1)
+    if (dbus_send_msg_reply_async(client, msg, -1, get_managed_objects_reply,
+            client, NULL)
         == FALSE) {
         dbus_message_unref(msg);
         return;
     }
-
-    if (dbus_pending_call_get_completed(client->get_objects_call)) {
-        get_managed_objects_reply(client->get_objects_call, client);
-    } else {
-        dbus_pending_call_set_notify(client->get_objects_call,
-            get_managed_objects_reply,
-            client, NULL);
-    }
-
+    client->getting_object_call = TRUE;
     dbus_message_unref(msg);
 }
 
@@ -1677,6 +1675,8 @@ GDBusClient* dbus_client_new_full(DBusConnection* connection,
 
     client->match_rules = ptr_array_sized_new(1);
 
+    uv_async_queue_init(uv_default_loop(), &client->async_queue, dbus_send_msg_async_cb);
+    client->main_thread = uv_thread_self();
     client->watch = dbus_add_service_watch(connection, service,
         service_connect,
         service_disconnect,
@@ -1708,7 +1708,7 @@ GDBusClient* dbus_client_new_full(DBusConnection* connection,
     }
 
     for (i = 0; i < client->match_rules->len; i++) {
-        modify_match(client->dbus_conn, "AddMatch",
+        modify_match(client, "AddMatch",
             client->match_rules->data[i]);
     }
 
@@ -1740,13 +1740,10 @@ void dbus_client_unref(GDBusClient* client)
         dbus_pending_call_unref(client->pending_call);
     }
 
-    if (client->get_objects_call != NULL) {
-        dbus_pending_call_cancel(client->get_objects_call);
-        dbus_pending_call_unref(client->get_objects_call);
-    }
+    client->getting_object_call = FALSE;
 
     for (i = 0; i < client->match_rules->len; i++) {
-        modify_match(client->dbus_conn, "RemoveMatch",
+        modify_match(client, "RemoveMatch",
             client->match_rules->data[i]);
     }
 
@@ -1770,6 +1767,7 @@ void dbus_client_unref(GDBusClient* client)
 
     dbus_connection_unref(client->dbus_conn);
 
+    uv_close((uv_handle_t*)&client->async_queue, NULL);
     free(client->service_name);
     free(client->base_path);
     free(client->root_path);
