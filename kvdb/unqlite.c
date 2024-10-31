@@ -45,7 +45,9 @@ static bool kvdb_is_readonly(const char* key)
 
 static bool unqlite_kv_is_exist(unqlite* db, const char* key, size_t key_len)
 {
-    return unqlite_kv_fetch(db, key, key_len, NULL, NULL) >= 0;
+    unqlite_int64 value_len;
+
+    return unqlite_kv_fetch(db, key, key_len, NULL, &value_len) >= 0;
 }
 
 int kvdb_set(struct kvdb* kvdb, const char* key, size_t key_len, const void* value, size_t val_len, bool force)
