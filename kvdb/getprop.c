@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
@@ -21,9 +22,27 @@
 #include <kvdb.h>
 
 #ifdef CONFIG_KVDB_DUMPLIST
-static void callback(const char* name, const char* value, void* cookie)
+static void callback(const char* name, const void* value, size_t val_len, void* cookie)
 {
-    printf("%s: %s\n", name, value);
+    const char* temp = value;
+    ssize_t i;
+
+    for (i = 0; i < val_len; i++) {
+        if (!isprint(temp[i]))
+            break;
+    }
+
+    if (name != NULL)
+        printf("%s: ", name);
+
+    /* All previous characters can be printed and ending '\0' */
+    if (i == val_len - 1 && temp[i] == '\0') {
+        printf("%s\n", temp);
+    } else {
+        for (i = 0; i < val_len; i++)
+            printf("%02x", temp[i]);
+        printf("\n");
+    }
 }
 #endif
 
@@ -33,14 +52,16 @@ int main(int argc, char* argv[])
 
     if (argc == 2 && strncmp(argv[1], "-h", 3)) {
         char buf[PROP_VALUE_MAX];
-        if (property_get(argv[1], buf, ""))
-            printf("%s\n", buf);
-        else
-            ret = EINVAL;
+
+        ssize_t len = property_get_binary(argv[1], buf, sizeof(buf));
+        if (len < 0)
+            return len;
+
+        callback(NULL, buf, len, NULL);
     }
 #ifdef CONFIG_KVDB_DUMPLIST
     else if (argc == 1)
-        ret = -property_list(callback, NULL);
+        ret = -property_list_binary(callback, NULL);
 #endif
     else
         printf("Usage: %s [key]\n", argv[0]);
