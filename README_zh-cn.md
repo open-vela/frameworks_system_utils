@@ -2,25 +2,21 @@
 
 [[English](./README.md) | [中文](./README_zh-cn.md)]
 
-## 项目概揽
+## 项目概览
 
-当前目录下包含的主要是framework当中提供的一些常用工具实现
+当前目录下包含的主要是framework当中提供的一些常用工具实现.
+| 工具 | 工具简要描述 |
+| -- | -- |
+| `gdbus` | 对`D-Bus`接口封装, 方便操作`D-Bus` |
+| `kvdb` | 基于本地数据库的`键值对`数据存取接口 |
+| `log` | 提供和`Android`平台兼容的`Log API`接口<br>用于在`Vela`当中直接使用`Android` LOG API |
+| `trace` | 提供用于用户空间程序的打点工具 |
 
 ## 项目描述
 
 ### 1. gdbus
 
-`gdbus`模块是对`D-Bus`接口的进一步封装的API模块. `D-Bus`接口使用比较复杂, 实际模块使用时, 将`D-Bus`接口再次封装, 提供更简易操作的API接口. 模块主要按文件分类接口功能如下:
-
-1. `mainloop.c` : 主要实现`DBusConnection`连接与应用`loop`如何绑定的逻辑，与`lib UV loop`强制绑定. 当调用`g_dbus_setup_private`获取到`DbusConnection`新连接后，在`gdbus`内部调用再执行`setup_bus`接口，设置`dbusConnection`的`watch`,`timerout`和`dispatch`等`dbus`回调处理接口.
-
-2. `watch.c` : `gdbus`可以对指定服务的上下线、指定信号的发生、指定属性的改变进行监控. 每一个`watch`由`struct filter_data`表示, 所有的`watch`连接在全局链表`listeners`中. 所有监控的信号都会被添加到总线规则中，并通过filter过滤进行处理.
-
-3. `object.c` : 对`D-Bus`的标准接口`"org.freedesktop.DBus.ObjectManager"`进行拓展. `gdbus`中对`D-Bus`中的对象进一步拓展, 形成了对象树的概念, 每一个叶子节点都代表一个对象, 每个对象下可拥有多个接口, 每个接口下包含方法(`method`), 信号(`signal`), 属性(`properties`). 在`gdbus`中每一个对象由`object_path_ref`创建, 上下文为`struct generic_data`, 可通过下列函数进行根对象和叶子对象的创建. 通过`dbus_connection_register_object_path`绑定对象的消息处理函数`generic_message`.
-
-4. `client.c` : `gdbus`通过`client.c`进行`GDBusClient`的实现. `GDBusClient`是应用与服务之间`CS`结构中`client`端的抽象, 通常需要绑定要访问服务的名字, 服务上的具体对象`path`来使用, `client`通过与`D-Bus`建立的`connection`与服务进行通信, 非直连模式.<br>默认`GDBusClient`只接收除`D-Bus daemon`和服务发来的`signal`. 通过监听`"NameOwnerChanged"`的`dbus signal`, 获取服务`service`的上线和下线, 通过主动调用`dbus`方法`"GetManagedObjects"`, 获取服务`service`提供的对外能力.<br>每一个`GDBusClient`都管理一条`GDBusProxy`链表,`g_dbus_proxy_new`用于创建一个`GDBusProxy`, 它由对象`path`, 接口`name`和`GDBusClient`唯一标识, `GDBusProxy`用于监控该对象接口上的属性`properties`变化, 因此会调用`g_dbus_add_properties_watch`去监听信号`PropertiesChanged`,当发生变化时调用`properties_changed`.<br>对于每一个`proxy`都会调用`get_all_properties`获取指定对象接口下的有效属性, 通过调用对方标准接口方法: `org.freedesktop.DBus.Properties.GetAll`, 参数是接口名, 返回值是字典数组, 字典类型为`{STRING，VARIANT}`, 将获取到的所有属性保存到`prop_list`中, 并针对每一个`properties`调用`prop_func`和`property_changed`函数, 前者由`g_dbus_proxy_set_property_watch`指定, 后者由`g_dbus_client_set_proxy_handlers`指定.
-
-5. `polkit.c` : `gdbus`提供了`built-in`和外部安全认证, 其中`polkit`属于`built-in`服务, 它可通过`host`主机的接口对访问进行身份认证.
+`gdbus`模块是对`D-Bus`接口的进一步封装的API模块. 由于`D-Bus`接口使用比较复杂, 在实际模块使用时, 通过将`D-Bus`接口再次封装, 会方便使用. `gdbus`通过提供更简易操作的API接口，方便我们去操作`D-Bus`.
 
 ### 2. kvdb
 
@@ -253,7 +249,7 @@ int main() {
 
 1. 打开`CONFIG_SCHED_INSTRUMENTATION_DUMP`和`CONFIG_ATRACE`选项
 
-2. 然后在程序当中需要跟踪的地方添加上打点信息
+2. 在程序当中需要跟踪的地方添加上打点信息:
 
 ```cpp
 // 使用是添加头文件，必须添加TAG
@@ -273,7 +269,7 @@ int main(int argc, char *argv[])
 }
 ```
 
-3. 然后使用trace dump工具查看打点输出的结果
+3. 使用trace dump工具查看打点输出的结果:
 
 ```log
    hello-7   [0]   3.187400000: sched_wakeup_new: comm=hello pid=7 target_cpu=0

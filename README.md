@@ -4,23 +4,19 @@
 
 ## Project Overview
 
-The current directory mainly contains some commonly used tools implemented in the framework.
+The current directory mainly contains some common tool implementations provided by the framework.
+| Tool | Brief description of tool |
+| -- | -- |
+| `gdbus` | Encapsulation of the `D-Bus` interface for convenient operation of `D-Bus`. |
+| `kvdb` | `Key-value pair` data access interface based on local database. |
+| `log` | Provides an `Log API` interface compatible with the `Android` platform.<br>Used to directly use the `Android` LOG API in `Vela`. |
+| `trace` | Provides a dotting tool for user-space programs. |
 
 ## Project Description
 
 ### 1. gdbus
 
-The `gdbus` module is an API module that further encapsulates the `D-Bus` interface. The `D-Bus` interface is complex to use, so the module encapsulates it again to provide simpler API interfaces for use. The main functions of the module are classified by file as follows:
-
-1. `mainloop.c`: It implements the logic of binding `DBusConnection` to the application `loop` and forces binding with `lib UV loop`. After calling `g_dbus_setup_private` to get a new `DbusConnection`, it calls `setup_bus` interface inside `gdbus` to set `dbusConnection`'s `watch`, `timerout`, and `dispatch` dbus callback handling interfaces.
-
-2. `watch.c`: `gdbus` can monitor the online and offline of specified services, the occurrence of specified signals, and the change of specified properties. Each `watch` is represented by `struct filter_data`, and all monitored signals are added to the bus rules and processed through filter filtering.
-
-3. `object.c`: It expands the concept of object tree in `D-Bus` in `gdbus`, where each leaf node represents an object, each object can own multiple interfaces, and each interface contains methods (`method`), signals (`signal`), and properties (`properties`). In `gdbus`, each object is created by `object_path_ref`, with `struct generic_data` as the context, and you can create root objects and leaf objects through the following functions. `dbus_connection_register_object_path` is used to bind the message handling function `generic_message` to the object.
-
-4. `client.c`: `gdbus` implements `GDBusClient` through `client.c`. `GDBusClient` is an abstract of the `CS` structure between the application and the service, which usually needs to bind the name of the service to be accessed and the specific object `path` to be used. The `client` communicates with the service through the `D-Bus` established `connection`, and it is in a non-direct mode.<br> By default, `GDBusClient` only receives `signal` from `D-Bus daemon` and the service. It listens to the `"NameOwnerChanged"` `dbus signal` to get the online and offline of the service `service` through listening and calling the `dbus` method `"GetManagedObjects"` to get the capabilities provided by the service `service`. For each `GDBusClient`, it manages a list of `GDBusProxy`, `g_dbus_proxy_new` is used to create a `GDBusProxy`, which is determined by the object `path`, interface `name`, and the unique identifier of `GDBusClient`. `GDBusProxy` is used to monitor the changes in the property `properties` of the object interface. Therefore, it calls `g_dbus_add_properties_watch` to listen to the signal `PropertiesChanged` when it changes, and calls `properties_changed` when it changes.<br> For each `proxy`, it calls `get_all_properties` to get the valid properties under the specified object interface by calling the standard interface method: `org.freedesktop.DBus.Properties.GetAll`. The parameter is the interface name, and the return value is an array of dictionaries, with the dictionary type `{STRING, VARIANT}`. All properties obtained are saved in `prop_list`, and for each `properties`, it calls `prop_func` and `property_changed` function. `prop_func` is specified by `g_dbus_proxy_set_property_watch`, and `property_changed` is specified by `g_dbus_client_set_proxy_handlers`.
-
-5. `polkit.c`: `gdbus` provides `built-in` and external security authentication. Among them, `polkit` belongs to the `built-in` service, which can authenticate access through the interface of the host.
+The `gdbus` module is an API module that further encapsulates the `D-Bus` interface. Since the `D-Bus` interface is relatively complex to use, when actually using modules, by encapsulating the `D-Bus` interface again, it will be more convenient to use. `gdbus` provides an API interface with easier operation to facilitate our operation of `D-Bus`.
 
 ### 2. kvdb
 
@@ -73,7 +69,7 @@ This module mainly contains instrumentation tools for user-space programs. We ca
 
 ### 1. gdbus
 
-1. to enable the `CONFIG_LIB_DBUS` build option
+1. To enable the `CONFIG_LIB_DBUS` build option
 
 2. Instantiation
 
@@ -203,7 +199,7 @@ out:
 
 ### 3. log
 
-1. to enable the `CONFIG_ANDROID_LIBBASE` build option
+1. To enable the `CONFIG_ANDROID_LIBBASE` build option
 2. Then we can directly use the standard Android log API in the program to collect and print logs.
 
 ```c
@@ -224,9 +220,9 @@ int main() {
 
 ### 4. trace
 
-1. to enable the `CONFIG_SCHED_INSTRUMENTATION_DUMP` and `CONFIG_ATRACE` build options
+1. To enable the `CONFIG_SCHED_INSTRUMENTATION_DUMP` and `CONFIG_ATRACE` build options
 
-2. the add the instrumentation point in the program:
+2. Add the instrumentation point in the program:
 
 ```cpp
 // define the tag for tracing
@@ -246,7 +242,7 @@ int main(int argc, char *argv[])
 }
 ```
 
-3. and then show the instrumentation result with `trace dump` tool:
+3. Show the instrumentation result with `trace dump` tool:
 
 ```log
    hello-7   [0]   3.187400000: sched_wakeup_new: comm=hello pid=7 target_cpu=0
