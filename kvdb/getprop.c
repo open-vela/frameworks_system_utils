@@ -21,7 +21,6 @@
 
 #include <kvdb.h>
 
-#ifdef CONFIG_KVDB_DUMPLIST
 static void callback(const char* name, const void* value, size_t val_len, void* cookie)
 {
     const char* temp = value;
@@ -44,7 +43,6 @@ static void callback(const char* name, const void* value, size_t val_len, void* 
         printf("\n");
     }
 }
-#endif
 
 int main(int argc, char* argv[])
 {
