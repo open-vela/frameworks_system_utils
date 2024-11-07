@@ -1152,6 +1152,18 @@ gboolean dbus_proxy_set_property_array(GDBusProxy* proxy,
     return TRUE;
 }
 
+static void check_dbus_noreply_err(DBusMessage* msg)
+{
+    DBusError err;
+
+    dbus_error_init(&err);
+    if (dbus_set_error_from_message(&err, msg) == TRUE) {
+        if (strstr(err.name, "NoReply"))
+            assert(0);
+        dbus_error_free(&err);
+    }
+}
+
 struct method_call_data {
     GDBusReturnFunction function;
     void* user_data;
@@ -1168,6 +1180,8 @@ static void method_call_reply(DBusPendingCall* call, void* user_data)
 
     if (data->destroy)
         data->destroy(data->user_data);
+
+    check_dbus_noreply_err(reply);
 
     dbus_message_unref(reply);
 }
