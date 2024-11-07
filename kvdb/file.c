@@ -54,7 +54,7 @@ static int kvdb_file_set(const char* path, const char* key, const void* value, s
     }
 
     kvdb_file_genpath(path, key, filepath);
-    fd = open(filepath, O_WRONLY | O_CREAT | O_CLOEXEC, 0666);
+    fd = open(filepath, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0666);
     if (fd < 0) {
         KVERR("open %s error with %d", filepath, errno);
         return -errno;
