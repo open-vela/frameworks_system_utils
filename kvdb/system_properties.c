@@ -87,31 +87,29 @@ static void __system_property_foreach_callback(const char* key, const char* valu
 }
 
 /*
- * Passes a `prop_info` for each system property to the provided
- * callback.  Use __system_property_read_callback() to read the value.
+ * Iterates over each system property and invokes the provided callback.
+ * Use __system_property_read_callback() to read property values.
  *
- * This method is for inspecting and debugging the property system, and not generally useful.
+ * This function is mainly for inspecting and debugging the property system.
  */
+
 int __system_property_foreach(void (*__callback)(const prop_info* __pi, void* __cookie), void* __cookie)
 {
-    struct system_property_foreach_cookie cookie;
-    cookie.__callback = __callback;
-    cookie.__cookie = __cookie;
+    struct system_property_foreach_cookie cookie = {
+         .__cookie = __cookie,
+         .__callback = __callback};
+
     return property_list(__system_property_foreach_callback, &cookie);
 }
 
 /*
- * Waits for the specific system property identified by `pi` to be updated
- * past `old_serial`. Waits no longer than `relative_timeout`, or forever
- * if `relaive_timeout` is null.
+ * Waits for the system property `pi` to be updated past `old_serial`, with an optional timeout.
+ * If `pi` is NULL, it waits for the global serial number.
+ * If the serial is unknown, pass 0.
  *
- * If `pi` is null, waits for the global serial number instead.
- *
- * If you don't know the current serial, use 0.
- *
- * Returns true and updates `*new_serial_ptr` on success, or false if the call
- * timed out.
+ * Returns true if updated within the timeout, false if the call times out.
  */
+
 bool __system_property_wait(const prop_info* __pi, uint32_t __old_serial, uint32_t* __new_serial_ptr, const struct timespec* __relative_timeout)
 {
     int timems = __relative_timeout->tv_sec * 1000 + __relative_timeout->tv_nsec / 1000000;
