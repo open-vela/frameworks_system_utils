@@ -29,105 +29,89 @@ extern "C" {
 #endif
 
 /* clang-format off */
+
 /**
- * The ATRACE_TAG macro can be defined before including this header to trace
- * using one of the tags defined below.  It must be defined to one of the
- * following ATRACE_TAG_* macros.  The trace tag is used to filter tracing in
- * userland to avoid some of the runtime cost of tracing when it is not desired.
+ * Define ATRACE_TAG before including this header to filter tracing by one of the tags below.
+ * Use ATRACE_TAG_ALWAYS for always-on tracing (debug only, as it incurs performance cost).
+ * ATRACE_TAG_NEVER or undefined disables tracing.
  *
- * Defining ATRACE_TAG to be ATRACE_TAG_ALWAYS will result in the tracing always
- * being enabled - this should ONLY be done for debug code, as userland tracing
- * has a performance cost even when the trace is not being recorded.  Defining
- * ATRACE_TAG to be ATRACE_TAG_NEVER or leaving ATRACE_TAG undefined will result
- * in the tracing always being disabled.
- *
- * ATRACE_TAG_HAL should be bitwise ORed with the relevant tags for tracing
- * within a hardware module.  For example a camera hardware module would set:
+ * For hardware modules, combine ATRACE_TAG_HAL with relevant tags, e.g., for camera:
  * #define ATRACE_TAG  (ATRACE_TAG_CAMERA | ATRACE_TAG_HAL)
  *
- * Keep these in sync with frameworks/base/core/java/android/os/Trace.java.
+ * Sync with frameworks/base/core/java/android/os/Trace.java.
  */
-#define ATRACE_TAG_NEVER            0       // This tag is never enabled.
-#define ATRACE_TAG_ALWAYS           (1<<0)  // This tag is always enabled.
-#define ATRACE_TAG_GRAPHICS         (1<<1)
-#define ATRACE_TAG_INPUT            (1<<2)
-#define ATRACE_TAG_VIEW             (1<<3)
-#define ATRACE_TAG_WEBVIEW          (1<<4)
-#define ATRACE_TAG_WINDOW_MANAGER   (1<<5)
-#define ATRACE_TAG_ACTIVITY_MANAGER (1<<6)
-#define ATRACE_TAG_SYNC_MANAGER     (1<<7)
-#define ATRACE_TAG_AUDIO            (1<<8)
-#define ATRACE_TAG_VIDEO            (1<<9)
-#define ATRACE_TAG_CAMERA           (1<<10)
-#define ATRACE_TAG_HAL              (1<<11)
-#define ATRACE_TAG_APP              (1<<12)
-#define ATRACE_TAG_RESOURCES        (1<<13)
-#define ATRACE_TAG_DALVIK           (1<<14)
-#define ATRACE_TAG_RS               (1<<15)
-#define ATRACE_TAG_BIONIC           (1<<16)
-#define ATRACE_TAG_POWER            (1<<17)
-#define ATRACE_TAG_PACKAGE_MANAGER  (1<<18)
-#define ATRACE_TAG_SYSTEM_SERVER    (1<<19)
-#define ATRACE_TAG_DATABASE         (1<<20)
-#define ATRACE_TAG_NETWORK          (1<<21)
-#define ATRACE_TAG_ADB              (1<<22)
-#define ATRACE_TAG_VIBRATOR         (1<<23)
-#define ATRACE_TAG_AIDL             (1<<24)
-#define ATRACE_TAG_NNAPI            (1<<25)
-#define ATRACE_TAG_RRO              (1<<26)
-#define ATRACE_TAG_THERMAL          (1 << 27)
-#define ATRACE_TAG_LAST             ATRACE_TAG_THERMAL
 
-// Reserved for initialization.
-#define ATRACE_TAG_NOT_READY        (1ULL<<63)
+#define ATRACE_TAG_NEVER             0
+#define ATRACE_TAG_ALWAYS            (1<<0)
+#define ATRACE_TAG_GRAPHICS          (1<<1)
+#define ATRACE_TAG_INPUT             (1<<2)
+#define ATRACE_TAG_VIEW              (1<<3)
+#define ATRACE_TAG_WEBVIEW           (1<<4)
+#define ATRACE_TAG_WINDOW_MANAGER    (1<<5)
+#define ATRACE_TAG_ACTIVITY_MANAGER  (1<<6)
+#define ATRACE_TAG_SYNC_MANAGER      (1<<7)
+#define ATRACE_TAG_AUDIO             (1<<8)
+#define ATRACE_TAG_VIDEO             (1<<9)
+#define ATRACE_TAG_CAMERA            (1<<10)
+#define ATRACE_TAG_HAL               (1<<11)
+#define ATRACE_TAG_APP               (1<<12)
+#define ATRACE_TAG_RESOURCES         (1<<13)
+#define ATRACE_TAG_DALVIK            (1<<14)
+#define ATRACE_TAG_RS                (1<<15)
+#define ATRACE_TAG_BIONIC            (1<<16)
+#define ATRACE_TAG_POWER             (1<<17)
+#define ATRACE_TAG_PACKAGE_MANAGER   (1<<18)
+#define ATRACE_TAG_SYSTEM_SERVER     (1<<19)
+#define ATRACE_TAG_DATABASE          (1<<20)
+#define ATRACE_TAG_NETWORK           (1<<21)
+#define ATRACE_TAG_ADB               (1<<22)
+#define ATRACE_TAG_VIBRATOR          (1<<23)
+#define ATRACE_TAG_AIDL              (1<<24)
+#define ATRACE_TAG_NNAPI             (1<<25)
+#define ATRACE_TAG_RRO               (1<<26)
+#define ATRACE_TAG_THERMAL           (1 << 27)
+#define ATRACE_TAG_LAST              ATRACE_TAG_THERMAL
 
-#define ATRACE_TAG_VALID_MASK ((ATRACE_TAG_LAST - 1) | ATRACE_TAG_LAST)
+/* Reserved for initialization. */
+
+#define ATRACE_TAG_NOT_READY         (1ULL<<63)
+
+#define ATRACE_TAG_VALID_MASK        ((ATRACE_TAG_LAST - 1) | ATRACE_TAG_LAST)
 
 #ifndef ATRACE_TAG
-#define ATRACE_TAG ATRACE_TAG_NEVER
-#elif ATRACE_TAG > ATRACE_TAG_VALID_MASK
-#error ATRACE_TAG must be defined to be one of the tags defined in cutils/trace.h
+  #define ATRACE_TAG ATRACE_TAG_NEVER
+#elif ATRACE_TAG_VALID_MASK < ATRACE_TAG
+  #error ATRACE_TAG must be defined to be one of the tags defined in cutils/trace.h
 #endif
 
 /**
- * Opens the trace file for writing and reads the property for initial tags.
- * The atrace.tags.enableflags property sets the tags to trace.
- * This function should not be explicitly called, the first call to any normal
- * trace function will cause it to be run safely.
+ * Opens trace file and reads initial tags from the system property.
+ * This is automatically called when the first trace function is used.
  */
 void atrace_setup(void);
 
 /**
- * If tracing is ready, set atrace_enabled_tags to the system property
- * debug.atrace.tags.enableflags. Can be used as a sysprop change callback.
+ * Updates `atrace_enabled_tags` from the system property `debug.atrace.tags.enableflags`.
  */
 void atrace_update_tags(void);
 
 /**
- * Set whether tracing is enabled for the current process.  This is used to
- * prevent tracing within the Zygote process.
+ * Enables or disables tracing for the current process (to prevent tracing in Zygote).
  */
 void atrace_set_tracing_enabled(bool enabled);
 
 /**
- * Set of ATRACE_TAG flags to trace for, initialized to ATRACE_TAG_NOT_READY.
- * A value of zero indicates setup has failed.
- * Any other nonzero value indicates setup has succeeded, and tracing is on.
+ * Set of enabled trace tags, initialized to ATRACE_TAG_NOT_READY. Zero indicates failure.
  */
 extern uint64_t atrace_enabled_tags;
 
 /**
- * Handle to the kernel's trace buffer, initialized to -1.
- * Any other value indicates setup has succeeded, and is a valid fd for tracing.
+ * Kernel trace buffer handle, initialized to -1. A valid fd indicates setup success.
  */
 extern int atrace_marker_fd;
 
 /**
- * @brief atrace_init
- *
- * readies the process for tracing by opening the trace_marker file.
- * Calling any trace function causes this to be run, so calling it is optional.
- * This can be explicitly run to avoid setup delay on first trace function.
+ * Initializes tracing by opening the trace_marker file (optional, runs automatically).
  */
 #define ATRACE_INIT() atrace_init()
 #define ATRACE_GET_ENABLED_TAGS() atrace_get_enabled_tags()
@@ -136,10 +120,8 @@ void atrace_init(void);
 uint64_t atrace_get_enabled_tags(void);
 
 /**
- * @brief Test if a given tag is currently enabled.
- *
- * It can be used as a guard condition around more expensive trace calculations.
- * @return Returns nonzero if the tag is enabled, otherwise zero.
+ * Checks if a given trace tag is enabled, useful for expensive trace calculations.
+ * Returns nonzero if enabled, zero otherwise.
  */
 #define ATRACE_ENABLED() atrace_is_tag_enabled(ATRACE_TAG)
 static inline uint64_t atrace_is_tag_enabled(uint64_t tag)
@@ -148,11 +130,8 @@ static inline uint64_t atrace_is_tag_enabled(uint64_t tag)
 }
 
 /**
- * @brief To indicate the beginning of tracing action
- *
- * Trace the beginning of a context.
- * This is often used to time function execution.
- * @param[in] name is used to identify the context.
+ * Starts a tracing context, typically used for function timing.
+ * @param name: Context name.
  */
 #define ATRACE_BEGIN(name) atrace_begin(ATRACE_TAG, name)
 static inline void atrace_begin(uint64_t tag, const char* name)
@@ -164,10 +143,7 @@ static inline void atrace_begin(uint64_t tag, const char* name)
 }
 
 /**
- * @brief To indicate the end of tracing action
- *
- * Trace the end of a context.
- * This should match up (and occur after) a corresponding ATRACE_BEGIN.
+ * Ends a tracing context that was started by ATRACE_BEGIN.
  */
 #define ATRACE_END() atrace_end(ATRACE_TAG)
 static inline void atrace_end(uint64_t tag)
@@ -179,19 +155,12 @@ static inline void atrace_end(uint64_t tag)
 }
 
 /**
- * @brief To indicate the beginning of async tracing action
- *
- * Trace the beginning of an asynchronous event. Unlike ATRACE_BEGIN/ATRACE_END
- * contexts, asynchronous events do not need to be nested.
- * @param[in] name   the name to describes the event
- * @param[in] cookie using to provides a unique identifier for distinguishing
- *                   simultaneous events. The name and cookie used to begin an
- *                   event must be used to end it.
+ * Starts an asynchronous tracing event. Unlike ATRACE_BEGIN/END, async events don't require nesting.
+ * @param name: Event name
+ * @param cookie: Unique identifier for the event.
  */
-#define ATRACE_ASYNC_BEGIN(name, cookie) \
-    atrace_async_begin(ATRACE_TAG, name, cookie)
-static inline void atrace_async_begin(uint64_t tag, const char* name,
-        int32_t cookie)
+#define ATRACE_ASYNC_BEGIN(name, cookie) atrace_async_begin(ATRACE_TAG, name, cookie)
+static inline void atrace_async_begin(uint64_t tag, const char* name, int32_t cookie)
 {
     if (atrace_is_tag_enabled(tag)) {
         void atrace_async_begin_body(const char*, int32_t);
@@ -200,14 +169,9 @@ static inline void atrace_async_begin(uint64_t tag, const char* name,
 }
 
 /**
- * @brief To indicate the beginning of async tracing action
- *
- * Trace the end of an asynchronous event.
- * This should have a corresponding ATRACE_ASYNC_BEGIN.
- * @param[in] name   the name to describes the event
- * @param[in] cookie using to provides a unique identifier for distinguishing
- *                   simultaneous events. The name and cookie used to begin an
- *                   event must be used to end it.
+ * Ends an asynchronous tracing event, matching a previous ATRACE_ASYNC_BEGIN.
+ * @param name: Event name
+ * @param cookie: Unique identifier for the event.
  */
 #define ATRACE_ASYNC_END(name, cookie) atrace_async_end(ATRACE_TAG, name, cookie)
 static inline void atrace_async_end(uint64_t tag, const char* name, int32_t cookie)
@@ -219,20 +183,15 @@ static inline void atrace_async_end(uint64_t tag, const char* name, int32_t cook
 }
 
 /**
- * @brief To indicate the beginning of async tracing action with trace info
- *
- * Trace the beginning of an asynchronous event.
- * @param[in] trace_name the track name is the name of the row where this
- *                       async event should be recorded. The track name,
- *                       name, and cookie used to begin an event must be
- *                       used to end it.
- * @param[in] name       the name to describes the event
- * @param[in] cookie     using to provides a unique identifier for distinguishing
- *                       simultaneous events. The name and cookie used to begin an
- *                       event must be used to end it.
+ * Starts an asynchronous event with a trace track.
+ * @param track_name: Track name where this async event is recorded.
+ * @param name: Event name.
+ * @param cookie: Unique event identifier.
  */
+
 #define ATRACE_ASYNC_FOR_TRACK_BEGIN(track_name, name, cookie) \
-    atrace_async_for_track_begin(ATRACE_TAG, track_name, name, cookie)
+        atrace_async_for_track_begin(ATRACE_TAG, track_name, name, cookie)
+
 static inline void atrace_async_for_track_begin(uint64_t tag, const char* track_name,
                                                 const char* name, int32_t cookie) {
     if (atrace_is_tag_enabled(tag)) {

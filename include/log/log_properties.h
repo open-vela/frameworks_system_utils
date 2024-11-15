@@ -17,12 +17,17 @@
 #pragma once
 
 #ifdef __cplusplus
+
 extern "C" {
+
 #endif
 
-/* Returns `1` if the device is debuggable or `0` if not. */
+/* Returns `1` if the device is debuggable */
+
 int __android_log_is_debuggable();
 
 #ifdef __cplusplus
+
 }
+
 #endif

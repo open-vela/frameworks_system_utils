@@ -42,53 +42,44 @@ typedef struct prop_info prop_info;
 #define PROP_VALUE_MAX  255
 
 /*
- * Sets system property `name` to `value`, creating the system property if it doesn't already exist.
+ * Sets system property `name` to `value`, creating it if it doesn't exist.
  */
-int __system_property_set(const char* __name, const char* __value);
+int __system_property_set(const char* __name,
+                          const char* __value);
 
 /*
- * Returns a `prop_info` corresponding system property `name`, or nullptr if it doesn't exist.
- * Use __system_property_read_callback to query the current value.
- *
- * Property lookup is expensive, so it can be useful to cache the result of this function.
+ * Returns a `prop_info` for system property `name`, or NULL if not found.
+ * Consider caching the result due to the expensive lookup.
  */
 const prop_info* __system_property_find(const char* __name);
 
 /*
- * Calls `callback` with a consistent trio of name, value, and serial number for property `pi`.
+ * Calls `callback` with name, value, and serial number for property `pi`.
  */
 void __system_property_read_callback(const prop_info* __pi,
     void (*__callback)(void* __cookie, const char* __name, const char* __value, uint32_t __serial),
     void* __cookie);
 
 /*
- * Passes a `prop_info` for each system property to the provided
- * callback.  Use __system_property_read_callback() to read the value.
- *
- * This method is for inspecting and debugging the property system, and not generally useful.
+ * Iterates through all system properties and calls the provided callback for each.
+ * Primarily for debugging and inspection.
  */
 int __system_property_foreach(void (*__callback)(const prop_info* __pi, void* __cookie), void* __cookie);
 
 /*
- * Waits for the specific system property identified by `pi` to be updated
- * past `old_serial`. Waits no longer than `relative_timeout`, or forever
- * if `relaive_timeout` is null.
- *
- * If `pi` is null, waits for the global serial number instead.
- *
- * If you don't know the current serial, use 0.
- *
- * Returns true and updates `*new_serial_ptr` on success, or false if the call
- * timed out.
+ * Waits for the system property `pi` to be updated past `old_serial`, with an optional timeout.
+ * If `pi` is NULL, waits for the global serial number.
  */
 struct timespec;
 bool __system_property_wait(const prop_info* __pi, uint32_t __old_serial, uint32_t* __new_serial_ptr, const struct timespec* __relative_timeout);
 
-/* Deprecated. In Android O and above, there's no limit on property name length. */
+/* Deprecated: Property name length limit. */
 #define PROP_NAME_MAX   127
-/* Deprecated. Use __system_property_read_callback instead. */
+
+/* Deprecated: Use __system_property_read_callback instead. */
 int __system_property_read(const prop_info* __pi, char* __name, char* __value);
-/* Deprecated. Use __system_property_read_callback instead. */
+
+/* Deprecated: Use __system_property_read_callback instead. */
 int __system_property_get(const char* __name, char* __value);
 
 #if defined(__cplusplus)
