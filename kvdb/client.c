@@ -43,8 +43,21 @@ static ssize_t recv_safe(int sockfd, char* buf, size_t offset, size_t len)
 {
     while (offset < len) {
         ssize_t ret = recv(sockfd, buf + offset, len - offset, 0);
-        if (ret < 0)
+        if (ret < 0) {
+            if (errno == EAGAIN) {
+                struct pollfd pfd;
+                pfd.fd = sockfd;
+                pfd.events = POLLIN;
+                ret = poll(&pfd, 1, -1);
+                if (ret > 0 && (pfd.revents & POLLIN)) {
+                    continue;
+                } else {
+                    KVERR("poll ret %d error %d\n", ret, errno);
+                    break;
+                }
+            }
             return -errno;
+        }
         if (ret == 0)
             return -ENODATA;
         offset += ret;
