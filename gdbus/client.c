@@ -1781,7 +1781,7 @@ void dbus_client_unref(GDBusClient* client)
 
     dbus_connection_unref(client->dbus_conn);
 
-    uv_close((uv_handle_t*)&client->async_queue, NULL);
+    uv_async_queue_close(&client->async_queue, NULL);
     free(client->service_name);
     free(client->base_path);
     free(client->root_path);
