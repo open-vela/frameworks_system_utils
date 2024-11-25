@@ -1,0 +1,162 @@
+#
+# Copyright (C) 2020 Xiaomi Corporation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+config ALOG
+	int "Android Log level"
+	default -1 if NDEBUG
+	default 3 if !NDEBUG
+	range -1 6
+	---help---
+		ALOG is used to control the logging level for printing.
+		0:LOG_ALWAYS_FATAL
+		1:LOG_FATAL
+		2:LOG_ERROR
+		3:LOG_WARN
+		4:LOG_INFO
+		5:LOG_DEBUG
+		6:LOG_VERBOSE
+
+config ATRACE
+	bool "Android Trace"
+	default n
+	---help---
+		Enable Android Trace.
+
+config KVDB
+	tristate "key-value database"
+	default n
+
+if KVDB
+
+choice
+	prompt "KVDB log level"
+	default KVDB_LOG_SLIENT
+
+config KVDB_LOG_INFO
+	bool "KVDB_LOG_INFO"
+
+config KVDB_LOG_WARN
+	bool "KVDB_LOG_WARN"
+
+config KVDB_LOG_ERR
+	bool "KVDB_LOG_ERR"
+
+config KVDB_LOG_SLIENT
+	bool "KVDB_LOG_SLIENT"
+
+endchoice
+
+config KVDB_PRIORITY
+	int "task priority"
+	default 100
+
+config KVDB_STACKSIZE
+	int "stack size"
+	default 4096
+
+config KVDB_DUMPLIST
+	bool "KVDB dump list"
+	default y
+	---help---
+		Kvd will dump all key-value when use getprop without key
+
+config KVDB_SERVER
+	bool "KVDB server"
+	default n
+	---help---
+		Build kvdb in server mode. Operate database in a unified manner through the kvdb server
+
+config KVDB_DIRECT
+	bool "Access KVDB directly"
+	depends on !KVDB_SERVER
+	---help---
+		Operate the database directly. Applicable to scenarios where cross-core communication is not required
+
+if !KVDB_DIRECT
+
+config KVDB_SERVER_CPUNAME
+	string "which cpu kvdb server runs on"
+	depends on !KVDB_SERVER
+	default "ap"
+
+config KVDB_TIMEOUT_INTERVAL
+	int "transaction timeout interval(sec)"
+	default 0
+
+endif
+
+config KVDB_COMMIT_INTERVAL
+	int "commit time interval(sec)"
+	depends on KVDB_SERVER
+	default 5
+
+if KVDB_DIRECT || KVDB_SERVER
+
+config KVDB_SOURCE_PATH
+	string "database default value source path"
+	default "/etc/build.prop"
+
+config KVDB_TEMPORARY_STORAGE
+	bool "enable non-persistent Key-value storage"
+	default !DEFAULT_SMALL
+
+choice
+	prompt "the storage method of Key-value"
+	default KVDB_UNQLITE
+
+config KVDB_UNQLITE
+	bool "UNQLITE"
+	depends on UNQLITE
+	---help---
+		Configure the unqlite database to store Key-value.
+
+config KVDB_NVS
+	bool "NVS"
+	select MTD_CONFIG_NAMED
+	depends on MTD_CONFIG_FAIL_SAFE
+	---help---
+		Configure using Non-Volatile Storage to store Key-value
+
+config KVDB_FILE
+	bool "FILE"
+	---help---
+	Configure using file to store Key-value
+
+endchoice
+
+config KVDB_PERSIST_PATH
+	string "persistent database path"
+	default "/data/persist.db" if KVDB_UNQLITE
+	default "/dev/config" if KVDB_NVS
+
+config KVDB_TEMPORARY_PATH
+	string "non-persistent database path"
+	default "/tmp/temporary.db" if KVDB_UNQLITE
+	default "/dev/config_ram" if KVDB_NVS
+	depends on KVDB_TEMPORARY_STORAGE
+
+endif # KVDB_DIRECT || KVDB_SERVER
+
+config KVDB_QEMU_PROPERTIES
+        tristate "Goldfish boot-properties service"
+        default n
+        depends on GOLDFISH_PIPE
+        ---help---
+                Enable the Goldfish boot-properties service
+
+endif # KVDB
+
+osource "$APPSDIR/frameworks/system/utils/uv/Kconfig"

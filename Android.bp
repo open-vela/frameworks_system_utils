@@ -1,0 +1,41 @@
+cc_defaults {
+  name: "kvdb_defaults",
+
+  static_libs: [
+    "libkvdb",
+  ],
+}
+
+cc_library_static {
+    name: "libkvdb",
+    export_include_dirs: ["include"],
+
+    srcs: [
+        "kvdb/common.c",
+        "kvdb/system_properties.c",
+        "kvdb/client.c",
+    ],
+
+    cflags: [
+        "-DCONFIG_KVDB_SERVER_CPUNAME=\"ap\"",
+        "-fvisibility=hidden",
+    ],
+}
+
+cc_library_headers {
+    name: "likvdb_headers",
+    export_include_dirs: ["include"],
+    proprietary: true
+}
+
+cc_binary {
+    name: "kvset",
+    srcs: ["kvdb/setprop.c"],
+    defaults: ["kvdb_defaults"],
+}
+
+cc_binary {
+    name: "kvget",
+    srcs: ["kvdb/getprop.c"],
+    defaults: ["kvdb_defaults"],
+}
