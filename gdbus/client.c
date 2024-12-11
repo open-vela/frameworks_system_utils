@@ -716,7 +716,7 @@ static GDBusProxy* proxy_new(GDBusClient* client, const char* path,
 {
     GDBusProxy* proxy;
 
-    if (client->proxy_filter && client->proxy_filter(client, path, interface)) {
+    if (client->proxy_filter && client->proxy_filter(path, interface, client->user_data)) {
         return NULL;
     }
 
@@ -1432,7 +1432,7 @@ static gboolean get_properties_non_standard(GDBusClient* client)
             continue;
 
         client = proxy->client;
-        if (client->proxy_property_filter && client->proxy_property_filter(proxy)) {
+        if (client->proxy_property_filter && client->proxy_property_filter(proxy, client->user_data)) {
             if (!proxy->filter_first)
                 proxy_added(client, proxy);
             continue;
@@ -1904,13 +1904,13 @@ gboolean dbus_client_set_proxy_handlers(GDBusClient* client,
 }
 
 gboolean dbus_client_set_proxy_filter(GDBusClient* client,
-    GDBusProxyFilterFunction proxy_filter,
-    void* user_data)
+    GDBusProxyFilterFunction proxy_filter, void* user_data)
 {
     if (client == NULL)
         return FALSE;
 
     client->proxy_filter = proxy_filter;
+    client->user_data = user_data;
 
     return TRUE;
 }
