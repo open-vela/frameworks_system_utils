@@ -675,11 +675,11 @@ gboolean dbus_proxy_method_call(GDBusProxy* proxy, const char* method,
 
 typedef void (*GDBusClientFunction)(GDBusClient* client, void* user_data);
 typedef void (*GDBusProxyFunction)(GDBusProxy* proxy, void* user_data);
-typedef gboolean (*GDBusProxyPropertyFilterFunction)(GDBusProxy* proxy);
+typedef gboolean (*GDBusProxyPropertyFilterFunction)(GDBusProxy* proxy, void* user_data);
 typedef void (*GDBusPropertyFunction)(GDBusProxy* proxy, const char* name,
     DBusMessageIter* iter, void* user_data);
-typedef gboolean (*GDBusProxyFilterFunction)(GDBusClient* client, const char* path,
-    const char* interface);
+typedef gboolean (*GDBusProxyFilterFunction)(const char* path,
+    const char* interface, void* user_data);
 
 /**
  * @brief Sets a property monitor for the D-Bus proxy.
