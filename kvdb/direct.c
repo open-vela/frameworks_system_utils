@@ -206,3 +206,19 @@ int property_reload(void)
 {
     return 0;
 }
+
+/****************************************************************************
+ * Name: property_exit
+ *
+ * Description:
+ *   Exit Kvdb Server (Dummy Function)
+ *
+ * Input Parameters:
+ *   None
+ *
+ ****************************************************************************/
+
+int property_exit(void)
+{
+    return 0;
+}

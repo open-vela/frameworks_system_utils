@@ -787,3 +787,45 @@ int property_reload(void)
     close(fd);
     return ret;
 }
+
+/****************************************************************************
+ * Name: property_exit
+ *
+ * Description:
+ *   Exit Kvdb Server
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   On success returns 0.
+ *   On failure returns -errno.
+ *
+ ****************************************************************************/
+
+int property_exit(void)
+{
+    int fd = property_connect();
+    int ret;
+    int value;
+
+    if (fd < 0)
+        return fd;
+
+    ret = send(fd, "E", 1, 0);
+    if (ret < 0) {
+        KVERR("send error %d\n", errno);
+        ret = -errno;
+        goto out;
+    }
+
+    ret = recv(fd, &value, sizeof(value), 0);
+    if (ret < sizeof(value)) {
+        KVERR("recv error %d, ret %d\n", errno, ret);
+        ret = -errno;
+    }
+
+out:
+    close(fd);
+    return ret;
+}
