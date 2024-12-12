@@ -34,6 +34,8 @@ ifneq ($(CONFIG_KVDB_DIRECT),)
 CSRCS += kvdb/direct.c
 else
 CSRCS += kvdb/client.c
+MAINSRC += kvdb/exitprop.c
+PROGNAME += exitprop
 endif # CONFIG_KVDB_DIRECT
 CSRCS += kvdb/common.c kvdb/system_properties.c
 MAINSRC  += kvdb/setprop.c kvdb/getprop.c
