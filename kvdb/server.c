@@ -53,6 +53,7 @@ typedef struct kvdb_server {
     struct kvdb* kvdb;
     int fd[KVFD_COUNT];
     int efd;
+    bool running;
     kvdb_monitor_head head;
 } kvdb_server;
 
@@ -453,6 +454,13 @@ static bool kvdb_client(kvdb_server* server, int fd)
         free(msg);
         return false;
     }
+    case 'E': {
+        int ret = 0;
+        server->running = false;
+        kvdb_uninit(server->kvdb);
+        send(fd, &ret, sizeof(ret), 0);
+        break;
+    }
     }
 
 out:
@@ -482,8 +490,8 @@ static void kvdb_loop(kvdb_server* server)
     }
 
     time_t next = 0;
-
-    while (1) {
+    server->running = true;
+    while (server->running) {
         int timeout = -1;
 
         /* commit the change after timeout */
@@ -560,8 +568,6 @@ int main(int argc, char* argv[])
 
     kvdb_load(server.kvdb, CONFIG_KVDB_SOURCE_PATH, false);
     kvdb_loop(&server);
-    kvdb_uninit(server.kvdb);
-
 out:
     kvdb_unbind(server.fd);
     return -ret;

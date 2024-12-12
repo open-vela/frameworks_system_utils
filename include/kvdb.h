@@ -56,6 +56,12 @@ int property_commit(void);
 int property_reload(void);
 
 /**
+ * @brief Exit the kvdb service.
+ * @return On success returns 0, -errno otherwise.
+ */
+int property_exit(void);
+
+/**
  * @brief Wait the monitored key until its value updated or key deleted
  * @param[in] key the monitored key string, support fnmatch pattern
  * @param[in] the length of the newvalue
