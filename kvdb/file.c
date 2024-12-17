@@ -39,19 +39,20 @@ static void kvdb_file_genpath(const char* path, const char* key, char* filepath)
 }
 
 /****************************************************************************
+ * Public Functions
+ ****************************************************************************/
+
+/****************************************************************************
  * kvdb_file_set
  ****************************************************************************/
 
-static int kvdb_file_set(const char* path, const char* key, const void* value, size_t val_len)
+int kvdb_file_set(const char* path, const char* key,
+    const void* value, size_t val_len)
 {
     char filepath[PATH_MAX];
     size_t nbyteswrite = 0;
     ssize_t result;
     int fd;
-
-    if (val_len >= PROP_VALUE_MAX) {
-        return -E2BIG;
-    }
 
     kvdb_file_genpath(path, key, filepath);
     fd = open(filepath, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0666);
@@ -83,14 +84,27 @@ static int kvdb_file_set(const char* path, const char* key, const void* value, s
  * kvdb_file_get
  ****************************************************************************/
 
-static ssize_t kvdb_file_get(const char* path, const char* key, void* value, size_t val_len)
+ssize_t kvdb_file_get(const char* path, const char* key,
+    void* value, size_t val_len)
 {
     char filepath[PATH_MAX];
     size_t nbytesread = 0;
     ssize_t result;
+    ssize_t ret;
     int fd;
 
     kvdb_file_genpath(path, key, filepath);
+
+    if (value == NULL) {
+
+        /* Readonly property only check if exist, no read required. */
+
+        if (access(filepath, O_RDONLY) == 0)
+            return val_len;
+        else
+            return -ENOENT;
+    }
+
     fd = open(filepath, O_RDONLY | O_CLOEXEC, 0666);
     if (fd < 0) {
         KVERR("open %s error with %d", filepath, errno);
@@ -100,32 +114,35 @@ static ssize_t kvdb_file_get(const char* path, const char* key, void* value, siz
     do {
         result = read(fd, value + nbytesread, val_len - nbytesread);
         if (result < 0) {
+            result = -errno;
             if (result == -EINTR) {
                 continue;
             }
 
             KVERR("read %s error with %d", filepath, errno);
+            ret = -errno;
             close(fd);
-            return -errno;
+            return ret;
         }
 
         nbytesread += result;
     } while (result > 0 && nbytesread < val_len);
 
+    ret = nbytesread;
     close(fd);
-    return nbytesread;
+    return ret;
 }
 
 /****************************************************************************
  * kvdb_file_list
  ****************************************************************************/
 
-static int kvdb_file_list(const char* path, kvdb_consume consume, void* cookie)
+int kvdb_file_list(const char* path, kvdb_consume consume, void* cookie)
 {
     char value[PROP_VALUE_MAX];
     struct dirent* entry;
+    int ret = 0;
     DIR* dir;
-    int ret;
 
     dir = opendir(path);
     if (!dir) {
@@ -140,22 +157,23 @@ static int kvdb_file_list(const char* path, kvdb_consume consume, void* cookie)
 
         ret = kvdb_file_get(path, entry->d_name, value, PROP_VALUE_MAX);
         if (ret < 0) {
-            closedir(dir);
-            return ret;
+            ret = -errno;
+            break;
         }
 
         consume(entry->d_name, value, ret, cookie);
+        ret = 0;
     }
 
     closedir(dir);
-    return 0;
+    return ret;
 }
 
 /****************************************************************************
  * kvdb_file_delete
  ****************************************************************************/
 
-static int kvdb_file_delete(const char* path, const char* key)
+int kvdb_file_delete(const char* path, const char* key)
 {
     char filepath[PATH_MAX];
 
@@ -163,12 +181,9 @@ static int kvdb_file_delete(const char* path, const char* key)
     return unlink(filepath);
 }
 
+#ifdef CONFIG_KVDB_FILE
 /****************************************************************************
- * Public Functions
- ****************************************************************************/
-
-/****************************************************************************
- * Name: kvdb_init
+ * Name: kvdb_persist_init
  *
  * Description:
  *   init resource of nvs .
@@ -181,13 +196,13 @@ static int kvdb_file_delete(const char* path, const char* key)
  *
  ****************************************************************************/
 
-int kvdb_init(struct kvdb** kvdb)
+int kvdb_persist_init(struct kvdb** kvdb)
 {
     return 0;
 }
 
 /****************************************************************************
- * Name: kvdb_uninit
+ * Name: kvdb_persist_uninit
  *
  * Description:
  *   init resource of filekv .
@@ -200,12 +215,12 @@ int kvdb_init(struct kvdb** kvdb)
  *
  ****************************************************************************/
 
-void kvdb_uninit(struct kvdb* kvdb)
+void kvdb_persist_uninit(struct kvdb* kvdb)
 {
 }
 
 /****************************************************************************
- * Name: kvdb_set
+ * Name: kvdb_persist_set
  *
  * Description:
  *   key-value set.
@@ -223,28 +238,14 @@ void kvdb_uninit(struct kvdb* kvdb)
  *
  ****************************************************************************/
 
-int kvdb_set(struct kvdb* kvdb, const char* key, size_t key_len,
+int kvdb_persist_set(struct kvdb* kvdb, const char* key, size_t key_len,
     const void* value, size_t val_len, bool force)
 {
-    int ret;
-
-    if (key == NULL || value == NULL)
-        return -EINVAL;
-
-    ret = kvdb_get_index(key);
-    if (ret < 0)
-        return ret;
-
-#ifdef CONFIG_KVDB_TEMPORARY_PATH
-    if (ret == KVDB_MEM) {
-        return kvdb_file_set(CONFIG_KVDB_TEMPORARY_PATH, key, value, val_len);
-    }
-#endif
     return kvdb_file_set(CONFIG_KVDB_PERSIST_PATH, key, value, val_len);
 }
 
 /****************************************************************************
- * Name: kvdb_get
+ * Name: kvdb_persist_get
  *
  * Description:
  *   key-value get.
@@ -261,28 +262,14 @@ int kvdb_set(struct kvdb* kvdb, const char* key, size_t key_len,
  *
  ****************************************************************************/
 
-ssize_t kvdb_get(struct kvdb* kvdb, const char* key, size_t key_len, void* value, size_t val_len)
+ssize_t kvdb_persist_get(struct kvdb* kvdb, const char* key, size_t key_len,
+    void* value, size_t val_len)
 {
-    int ret;
-
-    if (key == NULL || value == NULL)
-        return -EINVAL;
-
-    ret = kvdb_get_index(key);
-    if (ret < 0) {
-        return ret;
-    }
-
-#ifdef CONFIG_KVDB_TEMPORARY_PATH
-    if (ret == KVDB_MEM) {
-        return kvdb_file_get(CONFIG_KVDB_TEMPORARY_PATH, key, value, val_len);
-    }
-#endif
     return kvdb_file_get(CONFIG_KVDB_PERSIST_PATH, key, value, val_len);
 }
 
 /****************************************************************************
- * Name: kvdb_delete
+ * Name: kvdb_persist_delete
  *
  * Description:
  *   key-value delete.
@@ -297,46 +284,13 @@ ssize_t kvdb_get(struct kvdb* kvdb, const char* key, size_t key_len, void* value
  *
  ****************************************************************************/
 
-int kvdb_delete(struct kvdb* kvdb, const char* key, size_t key_len)
+int kvdb_persist_delete(struct kvdb* kvdb, const char* key, size_t key_len)
 {
-    int ret;
-
-    if (key == NULL)
-        return -EINVAL;
-
-    ret = kvdb_get_index(key);
-    if (ret < 0)
-        return ret;
-
-#ifdef CONFIG_KVDB_TEMPORARY_PATH
-    if (ret == KVDB_MEM) {
-        return kvdb_file_delete(CONFIG_KVDB_TEMPORARY_PATH, key);
-    }
-#endif
     return kvdb_file_delete(CONFIG_KVDB_PERSIST_PATH, key);
 }
 
 /****************************************************************************
- * Name: kvdb_commit
- *
- * Description:
- *   key-value commit, unused
- *
- * Input Parameters:
- *   kvdb    - Pointer to save filekv instance.
- *
- * Returned Value:
- *   0 on success, -ERRNO errno code if error.
- *
- ****************************************************************************/
-
-int kvdb_commit(struct kvdb* kvdb)
-{
-    return 0;
-}
-
-/****************************************************************************
- * Name: kvdb_list
+ * Name: kvdb_persist_list
  *
  *   key-value list.
  *
@@ -350,20 +304,26 @@ int kvdb_commit(struct kvdb* kvdb)
  *
  ****************************************************************************/
 
-int kvdb_list(struct kvdb* kvdb, kvdb_consume consume, void* cookie)
+int kvdb_persist_list(struct kvdb* kvdb, kvdb_consume consume, void* cookie)
 {
-    int ret;
-
-    if (!consume)
-        return -EINVAL;
-
-    ret = kvdb_file_list(CONFIG_KVDB_PERSIST_PATH, consume, cookie);
-    if (ret < 0)
-        return ret;
-
-#ifdef CONFIG_KVDB_TEMPORARY_PATH
-    return kvdb_file_list(CONFIG_KVDB_TEMPORARY_PATH, consume, cookie);
-#else
-    return ret;
-#endif
+    return kvdb_file_list(CONFIG_KVDB_PERSIST_PATH, consume, cookie);
 }
+
+/****************************************************************************
+ * Name: kvdb_persist_commit
+ *
+ *   key-value commit.
+ *
+ * Input Parameters:
+ *   kvdb      - Pointer to save filekv instance.
+ *
+ * Returned Value:
+ *   0 on success, -ERRNO errno code if error.
+ *
+ ****************************************************************************/
+
+int kvdb_persist_commit(struct kvdb* kvdb)
+{
+    return 0;
+}
+#endif

@@ -34,27 +34,22 @@
  ****************************************************************************/
 
 struct kvdb {
-    int fd[KVDB_COUNT];
+    int fd;
 };
 
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
 
-static const char* kvdb_skip_prefix(const char* key, int index)
+static inline const char* kvdb_skip_prefix(const char* key)
 {
-    return index == KVDB_PERSIST ? key + PERSIST_LABEL_LEN : key;
+    return key + PERSIST_LABEL_LEN;
 }
 
-static void kvdb_add_prefix(char* out, size_t outlen,
-    int index, const char* in)
+static void kvdb_add_prefix(char* out, size_t outlen, const char* in)
 {
-    if (index == KVDB_PERSIST) {
-        strlcpy(out, PERSIST_LABEL, outlen);
-        strlcat(out, in, outlen);
-    } else {
-        strlcpy(out, in, outlen);
-    }
+    strlcpy(out, PERSIST_LABEL, outlen);
+    strlcat(out, in, outlen);
 }
 
 /****************************************************************************
@@ -62,7 +57,7 @@ static void kvdb_add_prefix(char* out, size_t outlen,
  ****************************************************************************/
 
 /****************************************************************************
- * Name: kvdb_init
+ * Name: kvdb_persist_init
  *
  * Description:
  *   init resource of nvs .
@@ -75,7 +70,7 @@ static void kvdb_add_prefix(char* out, size_t outlen,
  *
  ****************************************************************************/
 
-int kvdb_init(struct kvdb** kvdb)
+int kvdb_persist_init(struct kvdb** kvdb)
 {
     struct kvdb* handle;
     int ret;
@@ -89,40 +84,21 @@ int kvdb_init(struct kvdb** kvdb)
     ret = open(CONFIG_KVDB_PERSIST_PATH, O_RDWR | O_CLOEXEC);
     if (ret < 0) {
         ret = -errno;
-        KVERR("open %s error with %d",
-            CONFIG_KVDB_PERSIST_PATH, ret);
+        KVERR("open %s error with %d", CONFIG_KVDB_PERSIST_PATH, ret);
         goto err;
     }
 
-    handle->fd[KVDB_PERSIST] = ret;
-
-#ifdef CONFIG_KVDB_TEMPORARY_STORAGE
-    ret = open(CONFIG_KVDB_TEMPORARY_PATH, O_RDWR | O_CLOEXEC);
-    if (ret < 0) {
-        ret = -errno;
-        KVERR("open %s error with %d",
-            CONFIG_KVDB_TEMPORARY_PATH, ret);
-        goto err;
-    }
-
-    handle->fd[KVDB_MEM] = ret;
-#endif
+    handle->fd = ret;
     *kvdb = handle;
-
     return 0;
 
 err:
-    for (int i = 0; i < KVDB_COUNT; i++) {
-        if (handle->fd[i])
-            close(handle->fd[i]);
-    }
-
     free(handle);
     return ret;
 }
 
 /****************************************************************************
- * Name: kvdb_uninit
+ * Name: kvdb_persist_uninit
  *
  * Description:
  *   init resource of nvs .
@@ -135,19 +111,14 @@ err:
  *
  ****************************************************************************/
 
-void kvdb_uninit(struct kvdb* kvdb)
+void kvdb_persist_uninit(struct kvdb* kvdb)
 {
-    int i;
-
-    for (i = 0; i < KVDB_COUNT; i++) {
-        close(kvdb->fd[i]);
-    }
-
+    close(kvdb->fd);
     free(kvdb);
 }
 
 /****************************************************************************
- * Name: kvdb_set
+ * Name: kvdb_persist_set
  *
  * Description:
  *   key-value set.
@@ -165,21 +136,13 @@ void kvdb_uninit(struct kvdb* kvdb)
  *
  ****************************************************************************/
 
-int kvdb_set(struct kvdb* kvdb, const char* key, size_t key_len,
+int kvdb_persist_set(struct kvdb* kvdb, const char* key, size_t key_len,
     const void* value, size_t val_len, bool force)
 {
     struct config_data_s data;
-    int index;
     int ret;
 
-    if (key == NULL || key_len == 0)
-        return -EINVAL;
-
-    index = kvdb_get_index(key);
-    if (index < 0)
-        return index;
-
-    key = kvdb_skip_prefix(key, index);
+    key = kvdb_skip_prefix(key);
 
     if (strlen(key) >= sizeof(data.name))
         return -EINVAL;
@@ -189,7 +152,7 @@ int kvdb_set(struct kvdb* kvdb, const char* key, size_t key_len,
     data.len = val_len;
     data.configdata = (uint8_t*)value;
 
-    ret = ioctl(kvdb->fd[index], CFGDIOC_SETCONFIG, &data);
+    ret = ioctl(kvdb->fd, CFGDIOC_SETCONFIG, &data);
     if (ret < 0) {
         ret = -errno;
         KVERR("IOCTL_SETCONFIG ERROR %d", ret);
@@ -199,7 +162,7 @@ int kvdb_set(struct kvdb* kvdb, const char* key, size_t key_len,
 }
 
 /****************************************************************************
- * Name: kvdb_get
+ * Name: kvdb_persist_get
  *
  * Description:
  *   key-value get.
@@ -216,20 +179,15 @@ int kvdb_set(struct kvdb* kvdb, const char* key, size_t key_len,
  *
  ****************************************************************************/
 
-ssize_t kvdb_get(struct kvdb* kvdb, const char* key, size_t key_len, void* value, size_t val_len)
+ssize_t kvdb_persist_get(struct kvdb* kvdb, const char* key, size_t key_len, void* value, size_t val_len)
 {
     struct config_data_s data;
-    int index;
     int ret;
 
     if (key == NULL || key_len == 0)
         return -EINVAL;
 
-    index = kvdb_get_index(key);
-    if (index < 0)
-        return index;
-
-    key = kvdb_skip_prefix(key, index);
+    key = kvdb_skip_prefix(key);
 
     if (strlen(key) >= sizeof(data.name))
         return -EINVAL;
@@ -238,7 +196,7 @@ ssize_t kvdb_get(struct kvdb* kvdb, const char* key, size_t key_len, void* value
     data.configdata = (uint8_t*)value;
     data.len = val_len;
 
-    ret = ioctl(kvdb->fd[index], CFGDIOC_GETCONFIG, &data);
+    ret = ioctl(kvdb->fd, CFGDIOC_GETCONFIG, &data);
     if (ret < 0) {
         ret = -errno;
         KVERR("CFGDIOC_GETCONFIG ERROR: %d", ret);
@@ -249,7 +207,7 @@ ssize_t kvdb_get(struct kvdb* kvdb, const char* key, size_t key_len, void* value
 }
 
 /****************************************************************************
- * Name: kvdb_delete
+ * Name: kvdb_persist_delete
  *
  * Description:
  *   key-value delete.
@@ -264,27 +222,19 @@ ssize_t kvdb_get(struct kvdb* kvdb, const char* key, size_t key_len, void* value
  *
  ****************************************************************************/
 
-int kvdb_delete(struct kvdb* kvdb, const char* key, size_t key_len)
+int kvdb_persist_delete(struct kvdb* kvdb, const char* key, size_t key_len)
 {
     struct config_data_s data;
-    int index;
     int ret;
 
-    if (key == NULL || key_len == 0)
-        return -EINVAL;
-
-    index = kvdb_get_index(key);
-    if (index < 0)
-        return index;
-
-    key = kvdb_skip_prefix(key, index);
+    key = kvdb_skip_prefix(key);
 
     if (strlen(key) >= sizeof(data.name))
         return -EINVAL;
 
     strlcpy(data.name, key, sizeof(data.name));
 
-    ret = ioctl(kvdb->fd[index], CFGDIOC_DELCONFIG, &data);
+    ret = ioctl(kvdb->fd, CFGDIOC_DELCONFIG, &data);
     if (ret < 0) {
         ret = -errno;
         KVERR("CFGDIOC_DELCONFIG ERROR: %d", ret);
@@ -294,7 +244,7 @@ int kvdb_delete(struct kvdb* kvdb, const char* key, size_t key_len)
 }
 
 /****************************************************************************
- * Name: kvdb_list
+ * Name: kvdb_persist_list
  *
  * Description:
  *   key-value list.
@@ -309,58 +259,63 @@ int kvdb_delete(struct kvdb* kvdb, const char* key, size_t key_len)
  *
  ****************************************************************************/
 
-int kvdb_list(struct kvdb* kvdb, kvdb_consume consume, void* cookie)
+int kvdb_persist_list(struct kvdb* kvdb, kvdb_consume consume, void* cookie)
 {
     char key[CONFIG_NAME_MAX + PERSIST_LABEL_LEN];
     uint8_t buf[PROP_VALUE_MAX];
     struct config_data_s data;
-    int i;
+    int ret;
 
     if (!consume)
         return 0;
 
-    for (i = 0; i < KVDB_COUNT; i++) {
+    data.configdata = buf;
+    data.len = PROP_VALUE_MAX;
+    ret = ioctl(kvdb->fd, CFGDIOC_FIRSTCONFIG, &data);
+    if (ret < 0)
+        return ret;
+
+    kvdb_add_prefix(key, sizeof(key), data.name);
+
+    consume(key, data.configdata, data.len, cookie);
+
+    while (1) {
         data.configdata = buf;
         data.len = PROP_VALUE_MAX;
-        int ret = ioctl(kvdb->fd[i], CFGDIOC_FIRSTCONFIG, &data);
-        if (ret < 0)
-            continue;
+        ret = ioctl(kvdb->fd, CFGDIOC_NEXTCONFIG, &data);
+        if (ret < 0) {
+            ret = -errno;
 
-        kvdb_add_prefix(key, sizeof(key), i, data.name);
+            /* ENOENT is expected when there are no more entries */
+
+            if (ret == -ENOENT)
+                ret = 0;
+
+            break;
+        }
+
+        kvdb_add_prefix(key, sizeof(key), data.name);
 
         consume(key, data.configdata, data.len, cookie);
-
-        while (1) {
-            data.configdata = buf;
-            data.len = PROP_VALUE_MAX;
-            ret = ioctl(kvdb->fd[i], CFGDIOC_NEXTCONFIG, &data);
-            if (ret < 0)
-                break;
-
-            kvdb_add_prefix(key, sizeof(key), i, data.name);
-
-            consume(key, data.configdata, data.len, cookie);
-        }
     }
 
-    return 0;
+    return ret;
 }
 
 /****************************************************************************
- * Name: kvdb_commit
+ * Name: kvdb_persist_commit
  *
- * Description:
- *   key-value commit, unused
+ *   key-value commit.
  *
  * Input Parameters:
- *   kvdb    - Pointer to save nvs kvdb instance.
+ *   kvdb      - Pointer to save filekv instance.
  *
  * Returned Value:
  *   0 on success, -ERRNO errno code if error.
  *
  ****************************************************************************/
 
-int kvdb_commit(struct kvdb* kvdb)
+int kvdb_persist_commit(struct kvdb* kvdb)
 {
     return 0;
 }
