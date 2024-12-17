@@ -37,7 +37,8 @@ CSRCS += kvdb/client.c
 MAINSRC += kvdb/exitprop.c
 PROGNAME += exitprop
 endif # CONFIG_KVDB_DIRECT
-CSRCS += kvdb/common.c kvdb/system_properties.c
+
+CSRCS += kvdb/common.c kvdb/system_properties.c kvdb/backend.c
 MAINSRC  += kvdb/setprop.c kvdb/getprop.c
 PROGNAME += setprop getprop
 
@@ -51,9 +52,11 @@ CSRCS += kvdb/nvs.c
 else ifneq ($(CONFIG_KVDB_UNQLITE),)
 CFLAGS += ${INCDIR_PREFIX}$(APPDIR)/external/unqlite/unqlite
 CSRCS += kvdb/unqlite.c
-else ifneq ($(CONFIG_KVDB_FILE),)
-CSRCS += kvdb/file.c
 endif # CONFIG_KVDB_NVS
+
+ifneq ($(CONFIG_KVDB_FILE)$(CONFIG_KVDB_TEMPORARY_STORAGE),)
+CSRCS += kvdb/file.c
+endif # CONFIG_KVDB_FILE or CONFIG_KVDB_TEMPORARY_STORAGE
 
 ifneq ($(CONFIG_KVDB_QEMU_PROPERTIES),)
 MAINSRC  += kvdb/qemu_properties.c

@@ -70,23 +70,6 @@ static inline int ascii2nibble(char ascii)
 }
 
 /****************************************************************************
- * Public Functions
- ****************************************************************************/
-
-int kvdb_get_index(const char* key)
-{
-    if (strncmp(key, PERSIST_LABEL, PERSIST_LABEL_LEN) == 0) {
-        return KVDB_PERSIST;
-    } else {
-#ifdef CONFIG_KVDB_TEMPORARY_STORAGE
-        return KVDB_MEM;
-#else
-        return -EINVAL;
-#endif
-    }
-}
-
-/****************************************************************************
  * Name: property_set_
  *
  * Description:
@@ -117,6 +100,10 @@ static int property_set_(const char* key, const char* value, bool oneway)
 
     return property_set_binary(key, value, strlen(value) + 1, oneway);
 }
+
+/****************************************************************************
+ * Public Functions
+ ****************************************************************************/
 
 /****************************************************************************
  * Name: property_set

@@ -48,13 +48,17 @@ if(CONFIG_SCHED_INSTRUMENTATION_DUMP
     else()
       list(APPEND CSRCS kvdb/client.c)
     endif()
-    list(APPEND CSRCS kvdb/common.c kvdb/system_properties.c)
+    list(APPEND CSRCS kvdb/common.c kvdb/system_properties.c kvdb/backend.c)
 
     if(CONFIG_KVDB_NVS)
       list(APPEND CSRCS kvdb/nvs.c)
     elseif(CONFIG_KVDB_UNQLITE)
       list(APPEND INCDIR ${NUTTX_APPS_DIR}/external/unqlite/unqlite)
       list(APPEND CSRCS kvdb/unqlite.c)
+    endif()
+
+    if(CONFIG_KVDB_FILE OR CONFIG_KVDB_TEMPORARY_STORAGE)
+      list(APPEND CSRCS kvdb/file.c)
     endif()
 
     if(CONFIG_KVDB_SERVER)

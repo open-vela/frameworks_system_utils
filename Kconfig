@@ -112,9 +112,10 @@ config KVDB_SOURCE_PATH
 config KVDB_TEMPORARY_STORAGE
 	bool "enable non-persistent Key-value storage"
 	default !DEFAULT_SMALL
+	depends on FS_TMPFS
 
 choice
-	prompt "the storage method of Key-value"
+	prompt "the persistent storage method of Key-value"
 	default KVDB_UNQLITE
 
 config KVDB_UNQLITE
@@ -143,9 +144,8 @@ config KVDB_PERSIST_PATH
 	default "/dev/config" if KVDB_NVS
 
 config KVDB_TEMPORARY_PATH
-	string "non-persistent database path"
-	default "/tmp/temporary.db" if KVDB_UNQLITE
-	default "/dev/config_ram" if KVDB_NVS
+	string "non-persistent database directory path"
+	default "/tmp/db"
 	depends on KVDB_TEMPORARY_STORAGE
 
 endif # KVDB_DIRECT || KVDB_SERVER
