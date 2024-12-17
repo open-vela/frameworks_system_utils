@@ -59,7 +59,6 @@ enum {
 #ifdef CONFIG_KVDB_TEMPORARY_STORAGE
     KVDB_MEM, /* save key-value pairs in memory */
 #endif
-    KVDB_COUNT
 };
 
 struct kvdb;
@@ -74,7 +73,20 @@ int kvdb_commit(struct kvdb* kvdb);
 int kvdb_init(struct kvdb** kvdb);
 void kvdb_uninit(struct kvdb* kvdb);
 
-int kvdb_get_index(const char* key);
+int kvdb_persist_init(struct kvdb** kvdb);
+void kvdb_persist_uninit(struct kvdb* kvdb);
+int kvdb_persist_commit(struct kvdb* kvdb);
+int kvdb_persist_list(struct kvdb* kvdb, kvdb_consume consume, void* cookie);
+ssize_t kvdb_persist_get(struct kvdb* kvdb, const char* key, size_t key_len, void* value, size_t val_len);
+int kvdb_persist_set(struct kvdb* kvdb, const char* key, size_t key_len, const void* value, size_t val_len, bool force);
+int kvdb_persist_delete(struct kvdb* kvdb, const char* key, size_t key_len);
+
+#ifdef CONFIG_KVDB_TEMPORARY_STORAGE
+int kvdb_file_set(const char* path, const char* key, const void* value, size_t val_len);
+ssize_t kvdb_file_get(const char* path, const char* key, void* value, size_t val_len);
+int kvdb_file_list(const char* path, kvdb_consume consume, void* cookie);
+int kvdb_file_delete(const char* path, const char* key);
+#endif
 
 #if defined(__cplusplus)
 }
