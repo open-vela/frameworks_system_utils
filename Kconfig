@@ -15,12 +15,18 @@
 #
 
 config ALOG
+	bool "Enable Android Log"
+	default n
+	select LIBC_PRINT_EXTENSION
+
+config ALOG_LEVEL
 	int "Android Log level"
-	default -1 if NDEBUG
+	default 0 if NDEBUG
 	default 3 if !NDEBUG
-	range -1 6
+	depends on ALOG
+	range 0 6
 	---help---
-		ALOG is used to control the logging level for printing.
+		ALOG_LEVEL is used to control the logging level for printing.
 		0:LOG_ALWAYS_FATAL
 		1:LOG_FATAL
 		2:LOG_ERROR
