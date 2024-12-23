@@ -134,7 +134,7 @@ extern int __fake_use_va_args(int, ...);
  * is -inverted- from the normal assert() semantics.
  */
 #ifndef LOG_ALWAYS_FATAL_IF
-#if !defined(CONFIG_ALOG) || CONFIG_ALOG >= 0
+#if !defined(CONFIG_ALOG_LEVEL) || CONFIG_ALOG_LEVEL >= 0
 #define LOG_ALWAYS_FATAL_IF(cond, ...)                               \
     ((__predict_false(cond)) ? (__FAKE_USE_VA_ARGS(__VA_ARGS__),     \
          ((void)android_printAssert(#cond, LOG_TAG, ##__VA_ARGS__))) \
@@ -146,7 +146,7 @@ extern int __fake_use_va_args(int, ...);
 #endif
 
 #ifndef LOG_ALWAYS_FATAL
-#if !defined(CONFIG_ALOG) || CONFIG_ALOG >= 0
+#if !defined(CONFIG_ALOG_LEVEL) || CONFIG_ALOG_LEVEL >= 0
 #define LOG_ALWAYS_FATAL(...) \
     (((void)android_printAssert(NULL, LOG_TAG, ##__VA_ARGS__)))
 #else
@@ -159,7 +159,7 @@ extern int __fake_use_va_args(int, ...);
  * are stripped out of release builds.
  */
 
-#if LOG_NDEBUG && !defined(CONFIG_ALOG) || defined(CONFIG_ALOG) && CONFIG_ALOG < 1
+#if LOG_NDEBUG && !defined(CONFIG_ALOG_LEVEL) || defined(CONFIG_ALOG_LEVEL) && CONFIG_ALOG_LEVEL < 1
 
 #ifndef LOG_FATAL_IF
 #define LOG_FATAL_IF(cond, ...) __FAKE_USE_VA_ARGS(__VA_ARGS__)
@@ -326,21 +326,21 @@ extern int __fake_use_va_args(int, ...);
  * The second argument may be NULL or "" to indicate the "global" tag.
  */
 #ifndef ALOG
-#ifndef CONFIG_ALOG
+#ifndef CONFIG_ALOG_LEVEL
 #define ALOG(priority, tag, ...) LOG_PRI(ANDROID_##priority, tag, __VA_ARGS__)
-#elif CONFIG_ALOG == 2
+#elif CONFIG_ALOG_LEVEL == 2
 #define ALOG(priority, tag, ...) \
     ((ANDROID_##priority >= ANDROID_LOG_ERROR) ? LOG_PRI(ANDROID_##priority, tag, __VA_ARGS__) : 0)
-#elif CONFIG_ALOG == 3
+#elif CONFIG_ALOG_LEVEL == 3
 #define ALOG(priority, tag, ...) \
     ((ANDROID_##priority >= ANDROID_LOG_WARN) ? LOG_PRI(ANDROID_##priority, tag, __VA_ARGS__) : 0)
-#elif CONFIG_ALOG == 4
+#elif CONFIG_ALOG_LEVEL == 4
 #define ALOG(priority, tag, ...) \
     ((ANDROID_##priority >= ANDROID_LOG_INFO) ? LOG_PRI(ANDROID_##priority, tag, __VA_ARGS__) : 0)
-#elif CONFIG_ALOG == 5
+#elif CONFIG_ALOG_LEVEL == 5
 #define ALOG(priority, tag, ...) \
     ((ANDROID_##priority >= ANDROID_LOG_DEBUG) ? LOG_PRI(ANDROID_##priority, tag, __VA_ARGS__) : 0)
-#elif CONFIG_ALOG == 6
+#elif CONFIG_ALOG_LEVEL == 6
 #define ALOG(priority, tag, ...) \
     ((ANDROID_##priority >= ANDROID_LOG_VERBOSE) ? LOG_PRI(ANDROID_##priority, tag, __VA_ARGS__) : 0)
 #else
@@ -376,24 +376,24 @@ extern int __fake_use_va_args(int, ...);
 int __android_log_is_loggable(int prio, const char* tag, int default_prio);
 int __android_log_is_loggable_len(int prio, const char* tag, size_t len, int default_prio);
 
-#ifdef CONFIG_ALOG
+#ifdef CONFIG_ALOG_LEVEL
 
-#if CONFIG_ALOG == 1
+#if CONFIG_ALOG_LEVEL == 1
 #define android_testLog(prio, tag) \
     ((prio >= ANDROID_LOG_FATAL) ? (__android_log_is_loggable_len(prio, tag, (tag) ? strlen(tag) : 0, prio) != 0) : 0)
-#elif CONFIG_ALOG == 2
+#elif CONFIG_ALOG_LEVEL == 2
 #define android_testLog(prio, tag) \
     ((prio >= ANDROID_LOG_ERROR) ? (__android_log_is_loggable_len(prio, tag, (tag) ? strlen(tag) : 0, prio) != 0) : 0)
-#elif CONFIG_ALOG == 3
+#elif CONFIG_ALOG_LEVEL == 3
 #define android_testLog(prio, tag) \
     ((prio >= ANDROID_LOG_WARN) ? (__android_log_is_loggable_len(prio, tag, (tag) ? strlen(tag) : 0, prio) != 0) : 0)
-#elif CONFIG_ALOG == 4
+#elif CONFIG_ALOG_LEVEL == 4
 #define android_testLog(prio, tag) \
     ((prio >= ANDROID_LOG_INFO) ? (__android_log_is_loggable_len(prio, tag, (tag) ? strlen(tag) : 0, prio) != 0) : 0)
-#elif CONFIG_ALOG == 5
+#elif CONFIG_ALOG_LEVEL == 5
 #define android_testLog(prio, tag) \
     ((prio >= ANDROID_LOG_DEBUG) ? (__android_log_is_loggable_len(prio, tag, (tag) ? strlen(tag) : 0, prio) != 0) : 0)
-#elif CONFIG_ALOG == 6
+#elif CONFIG_ALOG_LEVEL == 6
 #define android_testLog(prio, tag) \
     ((prio >= ANDROID_LOG_VERBOSE) ? (__android_log_is_loggable_len(prio, tag, (tag) ? strlen(tag) : 0, prio) != 0) : 0)
 #else
