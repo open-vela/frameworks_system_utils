@@ -57,6 +57,21 @@ if(CONFIG_SCHED_INSTRUMENTATION_DUMP
       list(APPEND CSRCS kvdb/direct.c)
     else()
       list(APPEND CSRCS kvdb/client.c)
+      nuttx_add_application(
+        MODULE
+        ${CONFIG_KVDB}
+        NAME
+        exitprop
+        STACKSIZE
+        ${CONFIG_KVDB_STACKSIZE}
+        PRIORITY
+        ${CONFIG_KVDB_PRIORITY}
+        SRCS
+        kvdb/exitprop.c
+        INCLUDE_DIRECTORIES
+        ${INCDIR}
+        DEPENDS
+        framework_utils)
     endif()
     list(APPEND CSRCS kvdb/common.c kvdb/system_properties.c kvdb/backend.c)
 
