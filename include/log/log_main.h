@@ -42,6 +42,10 @@ extern "C" {
 #endif
 #endif
 
+#ifndef CONFIG_ALOG
+#define CONFIG_ALOG_LEVEL -1
+#endif
+
 /* --------------------------------------------------------------------- */
 
 /*
