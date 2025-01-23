@@ -1720,7 +1720,9 @@ GDBusClient* dbus_client_new_full(DBusConnection* connection,
     client->match_rules = ptr_array_sized_new(1);
 
     uv_async_queue_init(uv_default_loop(), &client->async_queue, dbus_send_msg_async_cb);
+    client->async_queue.data = client;
     client->main_thread = uv_thread_self();
+
     client->watch = dbus_add_service_watch(connection, service,
         service_connect,
         service_disconnect,
@@ -1757,6 +1759,19 @@ GDBusClient* dbus_client_new_full(DBusConnection* connection,
     }
 
     return dbus_client_ref(client);
+}
+
+static void dbus_close_uv_async_cb(uv_handle_t* handle)
+{
+    uv_async_queue_t* async_queue = (uv_async_queue_t*)handle;
+    GDBusClient* client = (GDBusClient*)async_queue->data;
+
+    if (client != NULL) {
+        free(client->service_name);
+        free(client->base_path);
+        free(client->root_path);
+        free(client);
+    }
 }
 
 GDBusClient* dbus_client_ref(GDBusClient* client)
@@ -1815,12 +1830,7 @@ void dbus_client_unref(GDBusClient* client)
 
     dbus_connection_unref(client->dbus_conn);
 
-    uv_async_queue_close(&client->async_queue, NULL);
-    free(client->service_name);
-    free(client->base_path);
-    free(client->root_path);
-
-    free(client);
+    uv_async_queue_close(&client->async_queue, dbus_close_uv_async_cb);
 }
 
 gboolean dbus_client_set_connect_watch(GDBusClient* client,
