@@ -431,7 +431,19 @@ static bool kvdb_client(kvdb_server* server, int fd)
         break;
     }
     case 'R': {
-        kvdb_load(server->kvdb, CONFIG_KVDB_SOURCE_PATH, true);
+        size_t path_len = (unsigned char)msg[1];
+        size_t end_pos = path_len + 2;
+        if (end_pos >= PROP_MSG_MAX)
+            break;
+
+        const char* path = msg + 2;
+        len = kvdb_recv(fd, msg, len, end_pos);
+        if (len > 0) {
+            if (path[0])
+                kvdb_load(server->kvdb, path, true);
+            else
+                kvdb_load(server->kvdb, CONFIG_KVDB_SOURCE_PATH, true);
+        }
         break;
     }
     case 'M': {

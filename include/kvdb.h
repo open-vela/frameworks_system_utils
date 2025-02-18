@@ -50,10 +50,10 @@ int property_delete(const char* key);
 int property_commit(void);
 
 /**
- * @brief Reload default property value.
+ * @brief load default property value.
  * @return On success returns 0, -errno otherwise.
  */
-int property_reload(void);
+int property_load(const char* path);
 
 /**
  * @brief Exit the kvdb service.

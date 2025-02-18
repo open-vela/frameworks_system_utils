@@ -761,13 +761,13 @@ out:
 }
 
 /****************************************************************************
- * Name: property_reload
+ * Name: property_load
  *
  * Description:
- *   Reload default property value
+ *   load default property value
  *
  * Input Parameters:
- *   None
+ *   const char* path: file path
  *
  * Returned Value:
  *   On success returns 0.
@@ -775,14 +775,34 @@ out:
  *
  ****************************************************************************/
 
-int property_reload(void)
+int property_load(const char* path)
 {
-    int fd = property_connect();
+    size_t file_len;
     int ret;
+    int fd;
+
+    if (path == NULL)
+        path = "";
+
+    file_len = strlen(path) + 1;
+    fd = property_connect();
     if (fd < 0)
         return fd;
 
-    ret = send(fd, "R", 1, 0) > 0 ? 0 : -errno;
+    char cmd[2] = {
+        'R', file_len
+    };
+
+    struct iovec iov[2] = {
+        { .iov_base = cmd, .iov_len = 2 },
+        { .iov_base = (char*)path, .iov_len = file_len },
+    };
+
+    struct msghdr msg = { 0 };
+    msg.msg_iov = iov;
+    msg.msg_iovlen = 2;
+
+    ret = sendmsg(fd, &msg, 0) > 0 ? 0 : -errno;
 
     close(fd);
     return ret;
