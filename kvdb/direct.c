@@ -192,17 +192,17 @@ int property_commit(void)
 }
 
 /****************************************************************************
- * Name: property_reload
+ * Name: property_load
  *
  * Description:
- *   Reload default property value
+ *   load default property value
  *
  * Input Parameters:
- *   None
+ *   const char* path: file path
  *
  ****************************************************************************/
 
-int property_reload(void)
+int property_load(const char* path)
 {
     return 0;
 }
