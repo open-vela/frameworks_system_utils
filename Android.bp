@@ -39,3 +39,20 @@ cc_binary {
     srcs: ["kvdb/getprop.c"],
     defaults: ["framework_utils_defaults"],
 }
+
+cc_library_static {
+    name: "libkvdb_vendor",
+    export_include_dirs: ["include"],
+
+    srcs: [
+        "kvdb/common.c",
+        "kvdb/system_properties.c",
+        "kvdb/client.c",
+    ],
+
+    cflags: [
+        "-DCONFIG_KVDB_SERVER_CPUNAME=\"ap\"",
+        "-fvisibility=hidden",
+    ],
+    proprietary: true
+}
