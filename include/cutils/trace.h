@@ -134,10 +134,10 @@ static inline uint64_t atrace_is_tag_enabled(uint64_t tag)
  * @param name: Context name.
  */
 #define ATRACE_BEGIN(name) atrace_begin(ATRACE_TAG, name)
+void atrace_begin_body(const char*);
 static inline void atrace_begin(uint64_t tag, const char* name)
 {
     if (atrace_is_tag_enabled(tag)) {
-        void atrace_begin_body(const char*);
         atrace_begin_body(name);
     }
 }
@@ -146,10 +146,10 @@ static inline void atrace_begin(uint64_t tag, const char* name)
  * Ends a tracing context that was started by ATRACE_BEGIN.
  */
 #define ATRACE_END() atrace_end(ATRACE_TAG)
+void atrace_end_body(void);
 static inline void atrace_end(uint64_t tag)
 {
     if (atrace_is_tag_enabled(tag)) {
-        void atrace_end_body(void);
         atrace_end_body();
     }
 }
@@ -159,11 +159,13 @@ static inline void atrace_end(uint64_t tag)
  * @param name: Event name
  * @param cookie: Unique identifier for the event.
  */
-#define ATRACE_ASYNC_BEGIN(name, cookie) atrace_async_begin(ATRACE_TAG, name, cookie)
-static inline void atrace_async_begin(uint64_t tag, const char* name, int32_t cookie)
+#define ATRACE_ASYNC_BEGIN(name, cookie) \
+    atrace_async_begin(ATRACE_TAG, name, cookie)
+void atrace_async_begin_body(const char*, int32_t);
+static inline void atrace_async_begin(uint64_t tag, const char* name,
+        int32_t cookie)
 {
     if (atrace_is_tag_enabled(tag)) {
-        void atrace_async_begin_body(const char*, int32_t);
         atrace_async_begin_body(name, cookie);
     }
 }
@@ -174,10 +176,10 @@ static inline void atrace_async_begin(uint64_t tag, const char* name, int32_t co
  * @param cookie: Unique identifier for the event.
  */
 #define ATRACE_ASYNC_END(name, cookie) atrace_async_end(ATRACE_TAG, name, cookie)
+void atrace_async_end_body(const char*, int32_t);
 static inline void atrace_async_end(uint64_t tag, const char* name, int32_t cookie)
 {
     if (atrace_is_tag_enabled(tag)) {
-        void atrace_async_end_body(const char*, int32_t);
         atrace_async_end_body(name, cookie);
     }
 }
@@ -190,12 +192,11 @@ static inline void atrace_async_end(uint64_t tag, const char* name, int32_t cook
  */
 
 #define ATRACE_ASYNC_FOR_TRACK_BEGIN(track_name, name, cookie) \
-        atrace_async_for_track_begin(ATRACE_TAG, track_name, name, cookie)
-
+    atrace_async_for_track_begin(ATRACE_TAG, track_name, name, cookie)
+void atrace_async_for_track_begin_body(const char*, const char*, int32_t);
 static inline void atrace_async_for_track_begin(uint64_t tag, const char* track_name,
                                                 const char* name, int32_t cookie) {
     if (atrace_is_tag_enabled(tag)) {
-        void atrace_async_for_track_begin_body(const char*, const char*, int32_t);
         atrace_async_for_track_begin_body(track_name, name, cookie);
     }
 }
@@ -216,10 +217,10 @@ static inline void atrace_async_for_track_begin(uint64_t tag, const char* track_
  */
 #define ATRACE_ASYNC_FOR_TRACK_END(track_name, name, cookie) \
     atrace_async_for_track_end(ATRACE_TAG, track_name, name, cookie)
+void atrace_async_for_track_end_body(const char*, const char*, int32_t);
 static inline void atrace_async_for_track_end(uint64_t tag, const char* track_name,
                                               const char* name, int32_t cookie) {
     if (atrace_is_tag_enabled(tag)) {
-        void atrace_async_for_track_end_body(const char*, const char*, int32_t);
         atrace_async_for_track_end_body(track_name, name, cookie);
     }
 }
@@ -235,9 +236,9 @@ static inline void atrace_async_for_track_end(uint64_t tag, const char* track_na
  * @param[in] name the value that using to identify the context
  */
 #define ATRACE_INSTANT(name) atrace_instant(ATRACE_TAG, name)
+void atrace_instant_body(const char*);
 static inline void atrace_instant(uint64_t tag, const char* name) {
     if (atrace_is_tag_enabled(tag)) {
-        void atrace_instant_body(const char*);
         atrace_instant_body(name);
     }
 }
@@ -253,10 +254,10 @@ static inline void atrace_instant(uint64_t tag, const char* name) {
  */
 #define ATRACE_INSTANT_FOR_TRACK(trackName, name) \
     atrace_instant_for_track(ATRACE_TAG, trackName, name)
+void atrace_instant_for_track_body(const char*, const char*);
 static inline void atrace_instant_for_track(uint64_t tag, const char* track_name,
                                             const char* name) {
     if (atrace_is_tag_enabled(tag)) {
-        void atrace_instant_for_track_body(const char*, const char*);
         atrace_instant_for_track_body(track_name, name);
     }
 }
@@ -268,10 +269,10 @@ static inline void atrace_instant_for_track(uint64_t tag, const char* track_name
  * @param[in] velue this can be used to track how a value changes over time.
  */
 #define ATRACE_INT(name, value) atrace_int(ATRACE_TAG, name, value)
+void atrace_int_body(const char*, int32_t);
 static inline void atrace_int(uint64_t tag, const char* name, int32_t value)
 {
     if (atrace_is_tag_enabled(tag)) {
-        void atrace_int_body(const char*, int32_t);
         atrace_int_body(name, value);
     }
 }
@@ -283,10 +284,10 @@ static inline void atrace_int(uint64_t tag, const char* name, int32_t value)
  * @param[in] value This can be used to track how a value changes over time.
  */
 #define ATRACE_INT64(name, value) atrace_int64(ATRACE_TAG, name, value)
+void atrace_int64_body(const char*, int64_t);
 static inline void atrace_int64(uint64_t tag, const char* name, int64_t value)
 {
     if (atrace_is_tag_enabled(tag)) {
-        void atrace_int64_body(const char*, int64_t);
         atrace_int64_body(name, value);
     }
 }
