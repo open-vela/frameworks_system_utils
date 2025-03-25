@@ -135,6 +135,25 @@ if(CONFIG_SCHED_INSTRUMENTATION_DUMP
       ${INCDIR}
       DEPENDS
       framework_utils)
+
+    if(CONFIG_KVDB_QEMU_PROPERTIES)
+      nuttx_add_application(
+        MODULE
+        ${CONFIG_KVDB}
+        NAME
+        qemuprop
+        STACKSIZE
+        ${CONFIG_KVDB_STACKSIZE}
+        PRIORITY
+        ${CONFIG_KVDB_PRIORITY}
+        SRCS
+        kvdb/qemu_properties.c
+        INCLUDE_DIRECTORIES
+        ${INCDIR}
+        DEPENDS
+        framework_utils)
+    endif()
+
   endif()
 
   target_sources(framework_utils PRIVATE ${CSRCS})
