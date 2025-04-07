@@ -1475,7 +1475,6 @@ static gboolean interfaces_added(DBusConnection* conn, DBusMessage* msg,
     dbus_client_ref(client);
 
     parse_interfaces(client, path, &iter);
-    get_properties_non_standard(client);
 
     dbus_client_unref(client);
 
