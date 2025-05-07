@@ -1,19 +1,20 @@
 cc_defaults {
-  name: "kvdb_defaults",
+  name: "framework_utils_defaults",
 
   static_libs: [
-    "libkvdb",
+    "libframework_utils",
   ],
 }
 
 cc_library_static {
-    name: "libkvdb",
+    name: "libframework_utils",
     export_include_dirs: ["include"],
 
     srcs: [
         "kvdb/common.c",
         "kvdb/system_properties.c",
         "kvdb/client.c",
+        "misc/murmurhash.c",
     ],
 
     cflags: [
@@ -23,7 +24,7 @@ cc_library_static {
 }
 
 cc_library_headers {
-    name: "likvdb_headers",
+    name: "libframework_utils_headers",
     export_include_dirs: ["include"],
     proprietary: true
 }
@@ -31,11 +32,11 @@ cc_library_headers {
 cc_binary {
     name: "kvset",
     srcs: ["kvdb/setprop.c"],
-    defaults: ["kvdb_defaults"],
+    defaults: ["framework_utils_defaults"],
 }
 
 cc_binary {
     name: "kvget",
     srcs: ["kvdb/getprop.c"],
-    defaults: ["kvdb_defaults"],
+    defaults: ["framework_utils_defaults"],
 }

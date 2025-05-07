@@ -47,6 +47,7 @@ PROGNAME += exitprop
 endif # CONFIG_KVDB_DIRECT
 
 CSRCS += kvdb/common.c kvdb/system_properties.c kvdb/backend.c
+CSRCS += misc/murmurhash.c
 MAINSRC  += kvdb/setprop.c kvdb/getprop.c
 PROGNAME += setprop getprop
 
@@ -75,16 +76,6 @@ PRIORITY  = $(CONFIG_KVDB_PRIORITY)
 STACKSIZE = $(CONFIG_KVDB_STACKSIZE)
 MODULE    = $(CONFIG_KVDB)
 endif # CONFIG_KVDB
-
-ASRCS := $(wildcard $(ASRCS))
-CSRCS := $(wildcard $(CSRCS))
-CXXSRCS := $(wildcard $(CXXSRCS))
-MAINSRC := $(wildcard $(MAINSRC))
-NOEXPORTSRCS = $(ASRCS)$(CSRCS)$(CXXSRCS)$(MAINSRC)
-
-ifneq ($(NOEXPORTSRCS),)
-BIN := $(APPDIR)/staging/libutils.a
-endif
 
 EXPORT_FILES := gdbus/gdbus.h include
 
