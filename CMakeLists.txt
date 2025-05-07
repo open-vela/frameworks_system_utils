@@ -74,6 +74,7 @@ if(CONFIG_SCHED_INSTRUMENTATION_DUMP
         framework_utils)
     endif()
     list(APPEND CSRCS kvdb/common.c kvdb/system_properties.c kvdb/backend.c)
+    list(APPEND CSRCS misc/murmurhash.c)
 
     if(CONFIG_KVDB_NVS)
       list(APPEND CSRCS kvdb/nvs.c)
