@@ -51,7 +51,7 @@ static gboolean disconnected_signal(DBusConnection* conn,
 
     dbus_connection_unref(conn);
 
-    return TRUE;
+    return FALSE;
 }
 
 static void close_cb(uv_handle_t* handle)
@@ -401,5 +401,6 @@ gboolean dbus_set_disconnect_function(DBusConnection* connection,
         return FALSE;
     }
 
+    dbus_connection_ref(connection);
     return TRUE;
 }
