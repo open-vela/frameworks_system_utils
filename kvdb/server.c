@@ -17,6 +17,7 @@
 #include <fnmatch.h>
 #include <stdio.h>
 #include <sys/param.h>
+#include <unistd.h>
 
 #include <netpacket/rpmsg.h>
 #include <sys/ioctl.h>
