@@ -47,7 +47,6 @@ PROGNAME += exitprop
 endif # CONFIG_KVDB_DIRECT
 
 CSRCS += kvdb/common.c kvdb/system_properties.c kvdb/backend.c
-CSRCS += misc/murmurhash.c
 MAINSRC  += kvdb/setprop.c kvdb/getprop.c
 PROGNAME += setprop getprop
 

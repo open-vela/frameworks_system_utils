@@ -14,7 +14,6 @@ cc_library_static {
         "kvdb/common.c",
         "kvdb/system_properties.c",
         "kvdb/client.c",
-        "misc/murmurhash.c",
     ],
 
     cflags: [
