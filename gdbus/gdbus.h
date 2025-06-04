@@ -67,6 +67,8 @@ typedef uint32_t guint32;
 #define g_dbus_proxy_get_path dbus_proxy_get_path
 #define g_dbus_proxy_get_interface dbus_proxy_get_interface
 #define g_dbus_proxy_get_property dbus_proxy_get_property
+#define g_dbus_proxy_get_property_basic dbus_proxy_get_property_basic
+#define g_dbus_proxy_get_property_iter_cb dbus_proxy_get_property_iter_cb
 #define g_dbus_proxy_lookup dbus_proxy_lookup
 #define g_dbus_proxy_path_lookup dbus_proxy_path_lookup
 #define g_dbus_proxy_refresh_property dbus_proxy_refresh_property
@@ -104,6 +106,8 @@ typedef void (*GDBusMessageFunction)(DBusConnection* connection,
 
 typedef gboolean (*GDBusSignalFunction)(DBusConnection* connection,
     DBusMessage* message, void* user_data);
+
+typedef void (*GDBusPropIterFunction)(DBusMessageIter* iter, void* value);
 
 /**
  * @brief Set and connect to the specified DBus bus type
@@ -595,15 +599,51 @@ const char* dbus_proxy_get_path(const GDBusProxy* proxy);
 const char* dbus_proxy_get_interface(GDBusProxy* proxy);
 
 /**
- * @brief Get the properties of the D-Bus proxy
+ * @brief Gets a property value from a D-Bus proxy object, should run
+ * in uv default loop.
  *
- * @param proxy Pointer to GDBusProxy
- * @param name Name of the property
- * @param iter Pointer to DBusMessageIter
- * @return Returns whether the property was successfully obtained
+ * @param proxy The D-Bus proxy object to query
+ * @param name The name of the property to get
+ * @param iter Pointer to a DBusMessageIter to store the property value
+ * @return gboolean TRUE if successful, FALSE otherwise
+ *
+ * This function synchronously gets a property value from a D-Bus proxy object
+ * and stores it in the provided DBusMessageIter. The caller is responsible
+ * for properly handling the DBusMessageIter contents.
  */
 gboolean dbus_proxy_get_property(GDBusProxy* proxy, const char* name,
     DBusMessageIter* iter);
+
+/**
+ * @brief Gets a basic property value from a D-Bus proxy object (thread-safe)
+ *
+ * @param proxy The D-Bus proxy object to query
+ * @param name The name of the property to get
+ * @param value Pointer to store the property value (must match property type)
+ * @return gboolean TRUE if successful, FALSE otherwise
+ *
+ * This function synchronously gets a basic type property value from a D-Bus
+ * proxy object in a thread-safe manner. For complex struct properties,
+ * please use dbus_proxy_get_property_iter_cb instead. The value parameter
+ * must point to storage of the correct type for the property being retrieved.
+ */
+gboolean dbus_proxy_get_property_basic(GDBusProxy* proxy, const char* name,
+    void* value);
+
+/**
+ * Asynchronously gets a D-Bus proxy property with thread safety
+ *
+ * @param proxy The D-Bus proxy object to query
+ * @param name Name of the property to retrieve
+ * @param value Pointer to store the property value
+ * @param iter_cb Callback function to handle property iteration
+ * @return TRUE if property was successfully retrieved, FALSE on error
+ *
+ * @note This function handles thread synchronization automatically.
+ *       It can be called from any thread but will block if not in default loop.
+ */
+gboolean dbus_proxy_get_property_iter_cb(GDBusProxy* proxy, const char* name,
+    void* value, GDBusPropIterFunction iter_cb);
 
 GDBusProxy* dbus_proxy_lookup(void* list, int* index, const char* path,
     const char* interface);
