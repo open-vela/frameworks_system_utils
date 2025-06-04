@@ -96,6 +96,26 @@ struct prop_entry {
     DBusMessage* msg;
 };
 
+enum client_async_handler_type {
+    ASYNC_HDL_REPLY_ASYNC = 1,
+    ASYNC_HDL_GET_PROP,
+};
+
+typedef struct client_async_handler {
+    int handle_type;
+    void* data;
+} client_async_handler;
+
+struct get_prop_handler {
+    GDBusProxy* proxy;
+    const char* name;
+    void* prop_value;
+    GDBusPropIterFunction prop_iter_cb;
+    pthread_cond_t cond;
+    pthread_mutex_t mutex;
+    gboolean result;
+};
+
 struct pending_call_async {
     DBusConnection* conn;
     DBusMessage* msg;
@@ -107,6 +127,17 @@ struct pending_call_async {
 };
 
 static gboolean get_properties_specific(GDBusProxy* proxy);
+
+static client_async_handler* new_client_async_handler(int handle_type, void* data)
+{
+    client_async_handler* async_hdl = calloc(1, sizeof(client_async_handler));
+    if (async_hdl == NULL)
+        return NULL;
+    async_hdl->handle_type = handle_type;
+    async_hdl->data = data;
+
+    return async_hdl;
+}
 
 static gboolean dbus_send_msg_reply_pendingcall(DBusConnection* conn, DBusMessage* msg,
     DBusPendingCall** call, int timeout, DBusPendingCallNotifyFunction pending_reply,
@@ -136,15 +167,41 @@ static gboolean dbus_send_msg_reply_pendingcall(DBusConnection* conn, DBusMessag
     return TRUE;
 }
 
-static void dbus_send_msg_async_cb(uv_async_queue_t* async_queue, void* data)
+static void client_async_handler_reply(struct pending_call_async* handler)
 {
-    struct pending_call_async* handler = (struct pending_call_async*)data;
-
     dbus_send_msg_reply_pendingcall(handler->conn, handler->msg, handler->call,
         handler->timeout, handler->pending_reply, handler->user_data, handler->destroy);
     dbus_message_unref(handler->msg);
     dbus_connection_unref(handler->conn);
-    free(handler);
+}
+
+static void client_async_handler_get_prop(struct get_prop_handler* handler)
+{
+    DBusMessageIter iter;
+
+    handler->result = dbus_proxy_get_property(handler->proxy, handler->name, &iter);
+    if (handler->result == TRUE)
+        handler->prop_iter_cb(&iter, handler->prop_value);
+
+    pthread_mutex_lock(&handler->mutex);
+    pthread_cond_signal(&handler->cond);
+    pthread_mutex_unlock(&handler->mutex);
+}
+
+static void client_uv_async_queue_cb(uv_async_queue_t* async_queue, void* data)
+{
+    client_async_handler* async_hdl = (client_async_handler*)data;
+
+    switch (async_hdl->handle_type) {
+    case ASYNC_HDL_REPLY_ASYNC:
+        client_async_handler_reply(async_hdl->data);
+        break;
+    case ASYNC_HDL_GET_PROP:
+        client_async_handler_get_prop(async_hdl->data);
+        break;
+    }
+
+    free(async_hdl);
 }
 
 static gboolean dbus_send_msg_reply_async(GDBusClient* client, DBusMessage* msg,
@@ -174,10 +231,12 @@ static gboolean dbus_send_msg_reply_async(GDBusClient* client, DBusMessage* msg,
     handler->user_data = user_data;
     handler->destroy = destroy;
 
-    if (uv_async_queue_send(&client->async_queue, (void*)handler) != 0) {
+    client_async_handler* async_hdl = new_client_async_handler(ASYNC_HDL_REPLY_ASYNC, handler);
+    if (uv_async_queue_send(&client->async_queue, async_hdl) != 0) {
         dbus_connection_unref(client->dbus_conn);
         dbus_message_unref(msg);
         free(handler);
+        free(async_hdl);
         return FALSE;
     }
 
@@ -910,16 +969,64 @@ gboolean dbus_proxy_get_property(GDBusProxy* proxy, const char* name,
         return FALSE;
 
     prop = _dbus_hash_table_lookup_string(proxy->prop_list, name);
-    if (prop == NULL)
+    if (prop != NULL
+        && prop->msg != NULL
+        && dbus_message_iter_init(prop->msg, iter) == TRUE)
+        return TRUE;
+
+    return FALSE;
+}
+
+gboolean dbus_proxy_get_property_basic(GDBusProxy* proxy, const char* name,
+    void* value)
+{
+    return dbus_proxy_get_property_iter_cb(proxy, name, value,
+        dbus_message_iter_get_basic);
+}
+
+gboolean dbus_proxy_get_property_iter_cb(GDBusProxy* proxy, const char* name,
+    void* value, GDBusPropIterFunction iter_cb)
+{
+    DBusMessageIter iter;
+    uv_thread_t self_tid = uv_thread_self();
+    GDBusClient* client = proxy->client;
+    gboolean ret = FALSE;
+
+    if (proxy == NULL || name == NULL || client == NULL)
         return FALSE;
 
-    if (prop->msg == NULL)
-        return FALSE;
+    if (uv_thread_equal(&self_tid, &client->main_thread) != 0) {
+        if (dbus_proxy_get_property(proxy, name, &iter) == FALSE)
+            return FALSE;
 
-    if (dbus_message_iter_init(prop->msg, iter) == FALSE)
-        return FALSE;
+        iter_cb(&iter, value);
+        return TRUE;
+    }
 
-    return TRUE;
+    struct get_prop_handler* prop_hdl = calloc(1, sizeof(struct get_prop_handler));
+    if (prop_hdl == NULL)
+        return FALSE;
+    prop_hdl->proxy = proxy;
+    prop_hdl->name = name;
+    pthread_mutex_init(&prop_hdl->mutex, NULL);
+    pthread_cond_init(&prop_hdl->cond, NULL);
+    prop_hdl->prop_value = value;
+    prop_hdl->prop_iter_cb = iter_cb;
+    prop_hdl->result = FALSE;
+
+    client_async_handler* async_hdl = new_client_async_handler(ASYNC_HDL_GET_PROP, prop_hdl);
+    pthread_mutex_lock(&prop_hdl->mutex);
+    if (uv_async_queue_send(&client->async_queue, async_hdl) != 0) {
+        free(prop_hdl);
+        free(async_hdl);
+        return FALSE;
+    }
+
+    pthread_cond_wait(&prop_hdl->cond, &prop_hdl->mutex);
+    pthread_mutex_unlock(&prop_hdl->mutex);
+    ret = prop_hdl->result;
+    free(prop_hdl);
+    return ret;
 }
 
 struct refresh_property_data {
@@ -1750,7 +1857,7 @@ GDBusClient* dbus_client_new_full(DBusConnection* connection,
 
     client->match_rules = ptr_array_sized_new(1);
 
-    uv_async_queue_init(uv_default_loop(), &client->async_queue, dbus_send_msg_async_cb);
+    uv_async_queue_init(uv_default_loop(), &client->async_queue, client_uv_async_queue_cb);
     client->async_queue.data = client;
     client->main_thread = uv_thread_self();
 
