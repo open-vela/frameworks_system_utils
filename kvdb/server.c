@@ -19,6 +19,7 @@
 #include <sys/param.h>
 
 #include <netpacket/rpmsg.h>
+#include <sys/ioctl.h>
 #include <sys/epoll.h>
 #include <sys/queue.h>
 #include <sys/socket.h>
@@ -139,6 +140,17 @@ static void kvdb_monitor_notify(kvdb_server* server, const char* key, const void
     {
         if (fnmatch(mon->key, key, FNM_NOESCAPE) != 0)
             continue;
+
+        int space;
+        ioctl(mon->fd, FIONSPACE, &space);
+        if (space < (key_len + val_len + 2)) {
+            /* Check space before monitor notify to avoid deadlock.
+               Cause the send may write buffer full and wait,
+               then the client just get a new key and also wait,
+               deadlock! */
+            KVWARN("monitor space is not enough for key %s\n", key);
+            continue;
+        }
 
         if (sendmsg(mon->fd, &msg, 0) < 0) {
             /* Client close or some error happends, stop monitor */
