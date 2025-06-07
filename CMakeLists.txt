@@ -31,9 +31,7 @@ if(CONFIG_SCHED_INSTRUMENTATION_DUMP
 
   nuttx_add_library(framework_utils STATIC)
 
-  if(CONFIG_SCHED_INSTRUMENTATION_DUMP)
-    list(APPEND CSRCS trace/trace.c)
-  endif()
+  list(APPEND CSRCS trace/trace.c)
   if(CONFIG_ANDROID_LIBBASE)
     list(APPEND CSRCS log/log_write.c log/set_abort_message.c)
   endif()
