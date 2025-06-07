@@ -16,9 +16,7 @@
 
 include $(APPDIR)/Make.defs
 
-ifneq ($(CONFIG_SCHED_INSTRUMENTATION_DUMP),)
 CSRCS += trace/trace.c
-endif
 
 ifneq ($(CONFIG_ANDROID_LIBBASE),)
 CSRCS += log/log_write.c log/set_abort_message.c
