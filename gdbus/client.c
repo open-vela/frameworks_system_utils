@@ -106,6 +106,8 @@ struct pending_call_async {
     DBusFreeFunction destroy;
 };
 
+static gboolean get_properties_specific(GDBusProxy* proxy);
+
 static gboolean dbus_send_msg_reply_pendingcall(DBusConnection* conn, DBusMessage* msg,
     DBusPendingCall** call, int timeout, DBusPendingCallNotifyFunction pending_reply,
     void* user_data, DBusFreeFunction destroy)
@@ -1337,6 +1339,9 @@ static void parse_properties(GDBusClient* client, const char* path,
         proxy = proxy_new(client, path, interface);
         if (proxy == NULL)
             return;
+
+        get_properties_specific(proxy);
+        return;
     }
 
     update_properties(proxy, iter, FALSE, TRUE);
@@ -1450,6 +1455,33 @@ static gboolean get_properties_non_standard(GDBusClient* client)
             return FALSE;
         }
         proxy->getting_all_prop = TRUE;
+        dbus_message_unref(msg);
+    }
+
+    return TRUE;
+}
+
+static gboolean get_properties_specific(GDBusProxy* proxy)
+{
+    DBusMessage* msg;
+    GDBusClient* client;
+
+    client = proxy->client;
+    proxy_added(client, proxy);
+
+    if (client->proxy_property_filter && !client->proxy_property_filter(proxy, client->user_data)) {
+        msg = dbus_message_new_method_call(client->service_name,
+            proxy->obj_path, proxy->interface, "GetProperties");
+        if (msg == NULL)
+            return FALSE;
+
+        if (dbus_send_msg_reply_async(client, msg, &proxy->get_all_call, -1,
+                get_properties_reply_not_standard, proxy, NULL)
+            == FALSE) {
+            dbus_message_unref(msg);
+            return FALSE;
+        }
+
         dbus_message_unref(msg);
     }
 
