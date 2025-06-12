@@ -1,185 +1,226 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
 /*
+ * Copyright (C) 2025 Xiaomi Corporation
  *
- *  D-Bus helper library
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *  Copyright (C) 2004-2011  Marcel Holtmann <marcel@holtmann.org>
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
- *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include <errno.h>
+#include <stdlib.h>
 
 #include "gdbus.h"
 #include <dbus/dbus.h>
 
-int dbus_polkit_check_authorization(DBusConnection* conn,
-    const char* action, gboolean interaction,
-    void (*function)(dbus_bool_t authorized,
-        void* user_data),
-    void* user_data, int timeout);
+#define info(fmt...)
+#define error(fmt...)
+#define debug(fmt...)
 
-static void add_dict_with_string_value(DBusMessageIter* iter,
-    const char* key, const char* str)
+#define POLICY_KIT_DBUS_NAME "org.freedesktop.PolicyKit1"
+#define POLICY_KIT_INTERFACE "org.freedesktop.PolicyKit1.Authority"
+#define POLICY_KIT_PATH "/org/freedesktop/PolicyKit1/Authority"
+#define POLICY_KIT_ACTION "org.freedesktop.policykit.exec"
+
+typedef enum polkit_interaction_flag {
+    POLKIT_FLAG_NONE = 0x00000000,
+    POLKIT_FLAG_ALLOW = 0x00000001
+} polkit_interaction_flag;
+
+typedef struct authorization_context {
+    void (*callback)(dbus_bool_t authorized, void* user_data);
+    void* user_data;
+} authorization_context;
+
+typedef struct dict_entry_builder {
+    DBusMessageIter iter;
+    const char* key;
+    const char* value;
+} dict_entry_builder;
+
+typedef enum contained_sig_type {
+    SIG_TYPE_EMPTY,
+    SIG_TYPE_VARIANT,
+} contained_sig_type;
+
+static const char* init_contained_signature_type(contained_sig_type type)
 {
-    DBusMessageIter dict, entry, value;
+    switch (type) {
+    case SIG_TYPE_EMPTY:
+        return DBUS_DICT_ENTRY_BEGIN_CHAR_AS_STRING
+            DBUS_TYPE_STRING_AS_STRING
+                DBUS_TYPE_STRING_AS_STRING
+                    DBUS_DICT_ENTRY_END_CHAR_AS_STRING;
+    case SIG_TYPE_VARIANT:
+        return DBUS_DICT_ENTRY_BEGIN_CHAR_AS_STRING
+            DBUS_TYPE_STRING_AS_STRING
+                DBUS_TYPE_VARIANT_AS_STRING
+                    DBUS_DICT_ENTRY_END_CHAR_AS_STRING;
+    default:
+        return NULL;
+    }
+}
 
-    dbus_message_iter_open_container(iter, DBUS_TYPE_ARRAY,
-        DBUS_DICT_ENTRY_BEGIN_CHAR_AS_STRING
-            DBUS_TYPE_STRING_AS_STRING DBUS_TYPE_VARIANT_AS_STRING
-                DBUS_DICT_ENTRY_END_CHAR_AS_STRING,
-        &dict);
-    dbus_message_iter_open_container(&dict, DBUS_TYPE_DICT_ENTRY,
-        NULL, &entry);
+static void build_dict_entry(dict_entry_builder* builder)
+{
+    DBusMessageIter dict, entry, variant;
 
-    dbus_message_iter_append_basic(&entry, DBUS_TYPE_STRING, &key);
+    dbus_message_iter_open_container(&builder->iter, DBUS_TYPE_ARRAY,
+        init_contained_signature_type(SIG_TYPE_VARIANT), &dict);
+
+    dbus_message_iter_open_container(&dict, DBUS_TYPE_DICT_ENTRY, NULL, &entry);
+    dbus_message_iter_append_basic(&entry, DBUS_TYPE_STRING, &builder->key);
 
     dbus_message_iter_open_container(&entry, DBUS_TYPE_VARIANT,
-        DBUS_TYPE_STRING_AS_STRING, &value);
-    dbus_message_iter_append_basic(&value, DBUS_TYPE_STRING, &str);
-    dbus_message_iter_close_container(&entry, &value);
+        DBUS_TYPE_STRING_AS_STRING, &variant);
+    dbus_message_iter_append_basic(&variant, DBUS_TYPE_STRING, &builder->value);
 
+    dbus_message_iter_close_container(&entry, &variant);
     dbus_message_iter_close_container(&dict, &entry);
-    dbus_message_iter_close_container(iter, &dict);
+    dbus_message_iter_close_container(&builder->iter, &dict);
 }
 
-static void add_empty_string_dict(DBusMessageIter* iter)
+static void build_empty_dict(DBusMessageIter* iter)
 {
     DBusMessageIter dict;
-
     dbus_message_iter_open_container(iter, DBUS_TYPE_ARRAY,
-        DBUS_DICT_ENTRY_BEGIN_CHAR_AS_STRING
-            DBUS_TYPE_STRING_AS_STRING DBUS_TYPE_STRING_AS_STRING
-                DBUS_DICT_ENTRY_END_CHAR_AS_STRING,
-        &dict);
-
+        init_contained_signature_type(SIG_TYPE_EMPTY), &dict);
     dbus_message_iter_close_container(iter, &dict);
 }
 
-static void add_arguments(DBusConnection* conn, DBusMessageIter* iter,
-    const char* action, dbus_uint32_t flags)
+static void build_authorization_arguments(DBusConnection* conn, DBusMessageIter* iter,
+    const char* action, polkit_interaction_flag flags)
 {
-    const char* busname = dbus_bus_get_unique_name(conn);
-    const char* kind = "system-bus-name";
-    const char* cancel = "";
+    const char* bus_name = dbus_bus_get_unique_name(conn);
+    const char* subject_kind = "system-bus-name";
+    const char* cancellation_id = "";
     DBusMessageIter subject;
 
-    dbus_message_iter_open_container(iter, DBUS_TYPE_STRUCT,
-        NULL, &subject);
-    dbus_message_iter_append_basic(&subject, DBUS_TYPE_STRING, &kind);
-    add_dict_with_string_value(&subject, "name", busname);
+    // build main subject
+    dbus_message_iter_open_container(iter, DBUS_TYPE_STRUCT, NULL, &subject);
+    dbus_message_iter_append_basic(&subject, DBUS_TYPE_STRING, &subject_kind);
+
+    dict_entry_builder builder = {
+        .iter = subject,
+        .key = "name",
+        .value = bus_name
+    };
+    build_dict_entry(&builder);
     dbus_message_iter_close_container(iter, &subject);
 
-    dbus_message_iter_append_basic(iter, DBUS_TYPE_STRING, &action);
-    add_empty_string_dict(iter);
+    // add less parameters
+    dbus_message_iter_append_basic(iter, DBUS_TYPE_STRING,
+        action ? action : POLICY_KIT_ACTION);
+    build_empty_dict(iter);
     dbus_message_iter_append_basic(iter, DBUS_TYPE_UINT32, &flags);
-    dbus_message_iter_append_basic(iter, DBUS_TYPE_STRING, &cancel);
+    dbus_message_iter_append_basic(iter, DBUS_TYPE_STRING, &cancellation_id);
 }
 
-static dbus_bool_t parse_result(DBusMessageIter* iter)
+static dbus_bool_t parse_authorization_result(DBusMessageIter* iter)
 {
-    DBusMessageIter result;
-    dbus_bool_t authorized, challenge;
+    DBusMessageIter recurse_iter;
+    dbus_bool_t auth = FALSE;
 
-    dbus_message_iter_recurse(iter, &result);
+    if (!iter)
+        return FALSE;
 
-    dbus_message_iter_get_basic(&result, &authorized);
-    dbus_message_iter_get_basic(&result, &challenge);
+    dbus_message_iter_recurse(iter, &recurse_iter);
+    dbus_message_iter_get_basic(&recurse_iter, &auth);
 
-    return authorized;
+    return auth;
 }
 
-struct authorization_data {
-    void (*function)(dbus_bool_t authorized, void* user_data);
-    void* user_data;
-};
-
-static void authorization_reply(DBusPendingCall* call, void* user_data)
+static void handle_authorization_reply(DBusPendingCall* call, void* user_data)
 {
-    struct authorization_data* data = user_data;
-    DBusMessage* reply;
+    authorization_context* context = user_data;
+    DBusMessage* reply = NULL;
     DBusMessageIter iter;
     dbus_bool_t authorized = FALSE;
 
+    if (!call || !context)
+        goto cleanup;
+
     reply = dbus_pending_call_steal_reply(call);
+    if (!reply)
+        goto cleanup;
 
-    if (dbus_message_get_type(reply) == DBUS_MESSAGE_TYPE_ERROR)
-        goto done;
+    if (dbus_message_get_type(reply) == DBUS_MESSAGE_TYPE_ERROR) {
+        error("Authorization error: %s\n", dbus_message_get_error_name(reply));
+        goto cleanup;
+    }
 
-    if (dbus_message_has_signature(reply, "(bba{ss})") == FALSE)
-        goto done;
+    if (!dbus_message_has_signature(reply, "(bba{ss})")) {
+        error("Invalid reply signature\n");
+        goto cleanup;
+    }
 
     dbus_message_iter_init(reply, &iter);
+    authorized = parse_authorization_result(&iter);
 
-    authorized = parse_result(&iter);
+cleanup:
+    if (context->callback) {
+        context->callback(authorized, context->user_data);
+    }
 
-done:
-    if (data->function != NULL)
-        data->function(authorized, data->user_data);
-
-    dbus_message_unref(reply);
+    if (reply)
+        dbus_message_unref(reply);
 
     dbus_pending_call_unref(call);
 }
 
-#define AUTHORITY_DBUS "org.freedesktop.PolicyKit1"
-#define AUTHORITY_INTF "org.freedesktop.PolicyKit1.Authority"
-#define AUTHORITY_PATH "/org/freedesktop/PolicyKit1/Authority"
-
 int dbus_polkit_check_authorization(DBusConnection* conn,
-    const char* action, gboolean interaction,
-    void (*function)(dbus_bool_t authorized,
-        void* user_data),
-    void* user_data, int timeout)
+    const char* action, gboolean allow_interaction,
+    void (*callback)(dbus_bool_t, void*),
+    void* user_data, int timeout_ms)
 {
-    struct authorization_data* data;
     DBusMessage* msg;
     DBusMessageIter iter;
-    DBusPendingCall* call;
-    dbus_uint32_t flags = 0x00000000;
+    DBusPendingCall* pending_call = NULL;
+    polkit_interaction_flag flags;
 
-    if (conn == NULL)
+    if (!conn)
         return -EINVAL;
 
-    data = dbus_malloc0(sizeof(*data));
-    if (data == NULL)
+    authorization_context* context = calloc(1, sizeof(authorization_context));
+    if (!context)
         return -ENOMEM;
 
-    msg = dbus_message_new_method_call(AUTHORITY_DBUS, AUTHORITY_PATH,
-        AUTHORITY_INTF, "CheckAuthorization");
-    if (msg == NULL) {
-        dbus_free(data);
+    msg = dbus_message_new_method_call(POLICY_KIT_DBUS_NAME, POLICY_KIT_PATH,
+        POLICY_KIT_INTERFACE, "CheckAuthorization");
+    if (!msg) {
+        free(context);
         return -ENOMEM;
     }
 
-    if (interaction == TRUE)
-        flags |= 0x00000001;
-
-    if (action == NULL)
-        action = "org.freedesktop.policykit.exec";
+    flags = allow_interaction ? POLKIT_FLAG_ALLOW : POLKIT_FLAG_NONE;
 
     dbus_message_iter_init_append(msg, &iter);
-    add_arguments(conn, &iter, action, flags);
+    build_authorization_arguments(conn, &iter, action, flags);
 
-    if (dbus_connection_send_with_reply(conn, msg, &call, timeout)
-        == FALSE) {
+    if (!dbus_connection_send_with_reply(conn, msg, &pending_call, timeout_ms)) {
         dbus_message_unref(msg);
-        dbus_free(data);
+        free(context);
         return -EIO;
     }
 
-    if (call == NULL) {
+    if (!pending_call) {
         dbus_message_unref(msg);
-        dbus_free(data);
+        free(context);
         return -EIO;
     }
 
-    data->function = function;
-    data->user_data = user_data;
+    context->callback = callback;
+    context->user_data = user_data;
 
-    dbus_pending_call_set_notify(call, authorization_reply,
-        data, dbus_free);
-
+    dbus_pending_call_set_notify(pending_call, handle_authorization_reply,
+        context, free);
     dbus_message_unref(msg);
 
     return 0;
