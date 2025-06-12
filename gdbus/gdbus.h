@@ -872,6 +872,11 @@ gboolean dbus_client_set_proxy_filter(GDBusClient* client,
     GDBusProxyFilterFunction proxy_filter,
     void* user_data);
 
+int dbus_polkit_check_authorization(DBusConnection* conn,
+    const char* action, gboolean allow_interaction,
+    void (*callback)(dbus_bool_t, void*),
+    void* user_data, int timeout_ms);
+
 #ifdef __cplusplus
 }
 #endif
