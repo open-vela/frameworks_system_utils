@@ -25,7 +25,6 @@ typedef uint32_t guint32;
 #define g_dbus_setup_bus dbus_setup_bus
 #define g_dbus_setup_private dbus_setup_private
 #define g_dbus_request_name dbus_request_name
-#define g_dbus_set_disconnect_function dbus_set_disconnect_function
 #define g_dbus_set_flags dbus_set_flags
 #define g_dbus_get_flags dbus_get_flags
 #define g_dbus_register_interface dbus_register_interface
@@ -47,12 +46,6 @@ typedef uint32_t guint32;
 #define g_dbus_send_reply_valist dbus_send_reply_valist
 #define g_dbus_emit_signal dbus_emit_signal
 #define g_dbus_emit_signal_valist dbus_emit_signal_valist
-#define g_dbus_add_service_watch dbus_add_service_watch
-#define g_dbus_add_disconnect_watch dbus_add_disconnect_watch
-#define g_dbus_add_signal_watch dbus_add_signal_watch
-#define g_dbus_add_properties_watch dbus_add_properties_watch
-#define g_dbus_remove_watch dbus_remove_watch
-#define g_dbus_remove_all_watches dbus_remove_all_watches
 #define g_dbus_pending_property_success dbus_pending_property_success
 #define g_dbus_pending_property_error_valist dbus_pending_property_error_valist
 #define g_dbus_pending_property_error dbus_pending_property_error
@@ -149,28 +142,6 @@ DBusConnection* dbus_setup_private(DBusBusType type, const char* name, DBusError
  * of FALSE if the request fails.
  */
 gboolean dbus_request_name(DBusConnection* connection, const char* name, DBusError* error);
-
-/**
- * @brief Set the disconnection function of the DBus connection
- *
- * This function is used to set the disconnection function of the DBus connection.
- * This function will be called when the DBus connection is disconnected.
- *
- * @param connection Pointer to DBusConnection, indicating the DBus connection for which
- * the disconnection function is to be set.
- * @param function Pointer to GDBusWatchFunction, indicating the disconnection function
- * to be set.
- * @param user_data Pointer to any data. When the disconnection function is called, this
- * data will be passed to the disconnection function.
- * @param destroy Pointer to DBusFreeFunction, used to release the memory occupied by
- * user_data when it is no longer needed.
- *
- * @return If the setting is successful, return a true value of type gboolean; otherwise,
- * return a false value.
- */
-gboolean dbus_set_disconnect_function(DBusConnection* connection,
-    GDBusWatchFunction function,
-    void* user_data, DBusFreeFunction destroy);
 
 typedef void (*GDBusDestroyFunction)(void* user_data);
 
@@ -454,13 +425,35 @@ gboolean dbus_emit_signal_valist(DBusConnection* connection,
     const char* path, const char* interface,
     const char* name, int type, va_list args);
 
-guint dbus_add_service_watch(DBusConnection* connection, const char* name,
-    GDBusWatchFunction connect,
-    GDBusWatchFunction disconnect,
+typedef struct GDBusWatch GDBusWatch;
+
+/**
+ * Adds a service watch to monitor the specified D-Bus service name
+ * 
+ * @param watcher The GDBusWatch instance to add the watch to
+ * @param name The D-Bus service name to watch (e.g. "org.freedesktop.DBus")
+ * @param connect Callback function when service connects
+ * @param disconnect Callback function when service disconnects  
+ * @param user_data User data passed to callbacks
+ * @param destroy Destroy notification callback for user_data
+ * @return Watch ID that can be used to remove the watch
+ */
+guint dbus_add_service_watch(GDBusWatch* watcher, const char* name,
+    GDBusWatchFunction connect, GDBusWatchFunction disconnect,
     void* user_data, GDBusDestroyFunction destroy);
-guint dbus_add_disconnect_watch(DBusConnection* connection, const char* name,
-    GDBusWatchFunction function,
-    void* user_data, GDBusDestroyFunction destroy);
+
+/**
+ * Adds a disconnect watch for the specified D-Bus name
+ *
+ * @param watcher The GDBusWatch instance to add the watch to
+ * @param name The D-Bus name to monitor for disconnection
+ * @param function Callback function when name disconnects
+ * @param user_data User data passed to callback  
+ * @param destroy Destroy notification callback for user_data
+ * @return Watch ID that can be used to remove the watch
+ */
+guint dbus_add_service_disconnect_watch(GDBusWatch* watcher, const char* name,
+    GDBusWatchFunction function, void* user_data, GDBusDestroyFunction destroy);
 
 /**
  * @brief Add a signal monitor to the DBus connection
@@ -490,13 +483,13 @@ guint dbus_add_disconnect_watch(DBusConnection* connection, const char* name,
  * @return: Returns an unsigned integer representing the ID of the newly created signal
  * monitor.
  */
-guint dbus_add_signal_watch(DBusConnection* connection,
+guint dbus_add_signal_watch(GDBusWatch* watcher,
     const char* sender, const char* path,
     const char* interface, const char* member,
     GDBusSignalFunction function, void* user_data,
     GDBusDestroyFunction destroy);
 
-guint dbus_add_properties_watch(DBusConnection* connection,
+guint dbus_add_properties_watch(GDBusWatch* watcher,
     const char* sender, const char* path,
     const char* interface,
     GDBusSignalFunction function, void* user_data,
@@ -512,9 +505,9 @@ guint dbus_add_properties_watch(DBusConnection* connection,
  * @return gboolean The function returns TRUE if executed successfully, otherwise returns
  * FALSE
  */
-gboolean dbus_remove_watch(DBusConnection* connection, guint tag);
+gboolean dbus_remove_watch(GDBusWatch* watcher, guint tag);
 
-void dbus_remove_all_watches(DBusConnection* connection);
+void dbus_remove_all_watches(GDBusWatch* watcher);
 
 void dbus_pending_property_success(GDBusPendingPropertySet id);
 void dbus_pending_property_error_valist(GDBusPendingReply id,
@@ -872,10 +865,88 @@ gboolean dbus_client_set_proxy_filter(GDBusClient* client,
     GDBusProxyFilterFunction proxy_filter,
     void* user_data);
 
-int dbus_polkit_check_authorization(DBusConnection* conn,
-    const char* action, gboolean allow_interaction,
-    void (*callback)(dbus_bool_t, void*),
-    void* user_data, int timeout_ms);
+/**
+ * Adds a service watch for the specified name.
+ * @param client The DBus client instance
+ * @param name The service name to watch
+ * @param connect Callback when service connects
+ * @param disconnect Callback when service disconnects
+ * @param user_data User data passed to callbacks
+ * @param destroy Destroy notification callback
+ * @return Watch ID
+ */
+guint dbus_client_add_service_watch(GDBusClient* client, const char* name,
+    GDBusWatchFunction connect, GDBusWatchFunction disconnect,
+    void* user_data, GDBusDestroyFunction destroy);
+
+/**
+ * Adds a watch for service disconnection only.
+ * @param client The DBus client instance
+ * @param name The service name to watch
+ * @param function Callback when service disconnects
+ * @param user_data User data passed to callback
+ * @param destroy Destroy notification callback
+ * @return Watch ID
+ */
+guint dbus_client_add_service_disconnect_watch(GDBusClient* client, const char* name,
+    GDBusWatchFunction function, void* user_data, GDBusDestroyFunction destroy);
+
+/**
+ * Adds a signal watch with detailed matching criteria.
+ * @param client The DBus client instance
+ * @param sender The sender name to match
+ * @param path The object path to match
+ * @param interface The interface name to match
+ * @param member The member name to match
+ * @param function Callback when signal is received
+ * @param user_data User data passed to callback
+ * @param destroy Destroy notification callback
+ * @return Watch ID
+ */
+guint dbus_client_add_signal_watch(GDBusClient* client,const char* sender,
+    const char* path, const char* interface, const char* member,
+    GDBusSignalFunction function, void* user_data, GDBusDestroyFunction destroy);
+
+/**
+ * Adds a properties change watch.
+ * @param client The DBus client instance
+ * @param sender The sender name to match
+ * @param path The object path to match
+ * @param interface The interface name to match
+ * @param function Callback when properties change
+ * @param user_data User data passed to callback
+ * @param destroy Destroy notification callback
+ * @return Watch ID
+ */
+guint dbus_client_add_properties_watch(GDBusClient* client,
+    const char* sender, const char* path, const char* interface,
+    GDBusSignalFunction function, void* user_data, GDBusDestroyFunction destroy);
+
+/**
+ * Removes a previously added watch.
+ * @param client The DBus client instance
+ * @param tag The watch ID to remove
+ * @return TRUE if watch was found and removed
+ */
+gboolean dbus_client_remove_watch(GDBusClient* client, guint tag);
+
+/**
+ * Removes all watches from the client.
+ * @param client The DBus client instance
+ */
+void dbus_client_remove_all_watches(GDBusClient* client);
+
+/**
+ * Adds a watch for client disconnection.
+ * @param client The DBus client instance
+ * @param function Callback when client disconnects
+ * @param user_data User data passed to callback
+ * @param destroy Destroy notification callback
+ * @return Watch ID
+ */
+gboolean dbus_client_add_disconnect_watch(GDBusClient* client,
+    GDBusWatchFunction function, void* user_data, DBusFreeFunction destroy);
+
 
 #ifdef __cplusplus
 }

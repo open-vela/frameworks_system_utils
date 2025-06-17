@@ -1,11 +1,17 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
 /*
+ * Copyright (C) 2025 Xiaomi Corporation
  *
- *  D-Bus helper library
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *  Copyright (C) 2004-2011  Marcel Holtmann <marcel@holtmann.org>
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
- *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #ifdef HAVE_CONFIG_H
@@ -16,14 +22,11 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <uv_ext.h>
-
-#include <dbus/dbus-hash.h>
 #include <dbus/dbus-list.h>
 #include <dbus/dbus-string.h>
 #include <dbus/dbus.h>
 
-#include "gdbus.h"
+#include "gdbus-internal.h"
 
 /** method call timeout in milliseconds:
  * -1 (or #DBUS_TIMEOUT_USE_DEFAULT) for default timer(25s)
@@ -39,59 +42,6 @@ struct ptr_array {
     void** data;
     size_t len;
     size_t alloc_len;
-};
-
-struct GDBusClient {
-    int ref_count;
-    DBusConnection* dbus_conn;
-    char* service_name;
-    char* base_path;
-    char* root_path;
-    guint watch;
-    guint added_watch;
-    guint removed_watch;
-    struct ptr_array* match_rules;
-    DBusPendingCall* pending_call;
-    DBusPendingCall* get_objects_call;
-    GDBusWatchFunction connect_func;
-    void* connect_data;
-    GDBusWatchFunction disconn_func;
-    gboolean connected;
-    void* disconn_data;
-    GDBusMessageFunction signal_func;
-    void* signal_data;
-    GDBusProxyFunction proxy_added;
-    GDBusProxyFunction proxy_removed;
-    GDBusProxyPropertyFilterFunction proxy_property_filter;
-    GDBusProxyFilterFunction proxy_filter;
-    GDBusClientFunction ready;
-    void* ready_data;
-    gboolean ready_called;
-    GDBusPropertyFunction property_changed;
-    void* user_data;
-    DBusList* proxy_list;
-    gboolean standard;
-    gboolean getting_object_call;
-    uv_async_queue_t async_queue;
-    uv_thread_t main_thread;
-};
-
-struct GDBusProxy {
-    int ref_count;
-    GDBusClient* client;
-    char* obj_path;
-    char* interface;
-    DBusHashTable* prop_list;
-    guint watch;
-    guint watch_non_standard;
-    GDBusPropertyFunction prop_func;
-    void* prop_data;
-    GDBusProxyFunction removed_func;
-    void* removed_data;
-    DBusPendingCall* get_all_call;
-    gboolean pending;
-    gboolean filter_first;
-    gboolean getting_all_prop;
 };
 
 struct prop_entry {
@@ -795,14 +745,14 @@ static GDBusProxy* proxy_new(GDBusClient* client, const char* path,
 
     proxy->prop_list = _dbus_hash_table_new(DBUS_HASH_STRING,
         NULL, prop_entry_free);
-    proxy->watch = dbus_add_properties_watch(client->dbus_conn,
+    proxy->watch = dbus_add_properties_watch(client->watcher,
         client->service_name,
         proxy->obj_path,
         proxy->interface,
         properties_changed,
         proxy, NULL);
 
-    proxy->watch_non_standard = dbus_add_signal_watch(client->dbus_conn,
+    proxy->watch_non_standard = dbus_add_signal_watch(client->watcher,
         client->service_name,
         proxy->obj_path,
         proxy->interface,
@@ -835,8 +785,8 @@ static void proxy_free(gpointer data)
         if (client->proxy_removed)
             client->proxy_removed(proxy, client->user_data);
 
-        dbus_remove_watch(client->dbus_conn, proxy->watch);
-        dbus_remove_watch(client->dbus_conn, proxy->watch_non_standard);
+        dbus_remove_watch(client->watcher, proxy->watch);
+        dbus_remove_watch(client->watcher, proxy->watch_non_standard);
 
         _dbus_hash_table_remove_all(proxy->prop_list);
 
@@ -1856,14 +1806,14 @@ GDBusClient* dbus_client_new_full(DBusConnection* connection,
     client->base_path = strdup0(path);
     client->root_path = strdup0(root_path);
     client->connected = FALSE;
-
+    client->watcher = new_dbus_watch(connection);
     client->match_rules = ptr_array_sized_new(1);
 
     uv_async_queue_init(uv_default_loop(), &client->async_queue, client_uv_async_queue_cb);
     client->async_queue.data = client;
     client->main_thread = uv_thread_self();
 
-    client->watch = dbus_add_service_watch(connection, service,
+    client->watch = dbus_add_service_watch(client->watcher, service,
         service_connect,
         service_disconnect,
         client, NULL);
@@ -1871,13 +1821,13 @@ GDBusClient* dbus_client_new_full(DBusConnection* connection,
     if (!root_path)
         return dbus_client_ref(client);
 
-    client->added_watch = dbus_add_signal_watch(connection, service,
+    client->added_watch = dbus_add_signal_watch(client->watcher, service,
         client->root_path,
         DBUS_INTERFACE_OBJECT_MANAGER,
         "InterfacesAdded",
         interfaces_added,
         client, NULL);
-    client->removed_watch = dbus_add_signal_watch(connection, service,
+    client->removed_watch = dbus_add_signal_watch(client->watcher, service,
         client->root_path,
         DBUS_INTERFACE_OBJECT_MANAGER,
         "InterfacesRemoved",
@@ -1964,9 +1914,9 @@ void dbus_client_unref(GDBusClient* client)
     if (client->disconn_func && client->connected)
         client->disconn_func(client->dbus_conn, client->disconn_data);
 
-    dbus_remove_watch(client->dbus_conn, client->watch);
-    dbus_remove_watch(client->dbus_conn, client->added_watch);
-    dbus_remove_watch(client->dbus_conn, client->removed_watch);
+    dbus_remove_watch(client->watcher, client->watch);
+    dbus_remove_watch(client->watcher, client->added_watch);
+    dbus_remove_watch(client->watcher, client->removed_watch);
 
     dbus_connection_unref(client->dbus_conn);
 
