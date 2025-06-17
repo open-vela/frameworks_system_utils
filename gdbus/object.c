@@ -16,11 +16,7 @@
 #include <dbus/dbus.h>
 #include <uv.h>
 
-#include "gdbus.h"
-
-#define info(fmt...)
-#define error(fmt...)
-#define debug(fmt...)
+#include "gdbus-internal.h"
 
 #define DBUS_INTERFACE_OBJECT_MANAGER "org.freedesktop.DBus.ObjectManager"
 
@@ -337,12 +333,6 @@ void dbus_pending_error(DBusConnection* connection,
 
     va_end(args);
 }
-
-int dbus_polkit_check_authorization(DBusConnection* conn,
-    const char* action, gboolean interaction,
-    void (*function)(dbus_bool_t authorized,
-        void* user_data),
-    void* user_data, int timeout);
 
 struct builtin_security_data {
     DBusConnection* conn;

@@ -13,11 +13,7 @@
 #include <stdlib.h>
 #include <uv.h>
 
-#include "gdbus.h"
-
-#define info(fmt...)
-#define error(fmt...)
-#define debug(fmt...)
+#include "gdbus-internal.h"
 
 struct idle_handler {
     uv_idle_t handle;
@@ -34,25 +30,6 @@ struct watch_info {
     DBusWatch* watch;
     DBusConnection* conn;
 };
-
-struct disconnect_data {
-    GDBusWatchFunction function;
-    void* user_data;
-};
-
-static gboolean disconnected_signal(DBusConnection* conn,
-    DBusMessage* msg, void* data)
-{
-    struct disconnect_data* dc_data = data;
-
-    error("Got disconnected from the system message bus");
-
-    dc_data->function(conn, dc_data->user_data);
-
-    dbus_connection_unref(conn);
-
-    return FALSE;
-}
 
 static void close_cb(uv_handle_t* handle)
 {
@@ -379,20 +356,40 @@ gboolean dbus_request_name(DBusConnection* connection, const char* name,
     return TRUE;
 }
 
-gboolean dbus_set_disconnect_function(DBusConnection* connection,
-    GDBusWatchFunction function,
-    void* user_data, DBusFreeFunction destroy)
+struct disconnect_data {
+    GDBusWatchFunction function;
+    void* user_data;
+};
+
+static gboolean disconnected_signal(DBusConnection* conn,
+    DBusMessage* msg, void* data)
+{
+    struct disconnect_data* dc_data = data;
+
+    error("Got disconnected from the system message bus");
+
+    dc_data->function(conn, dc_data->user_data);
+
+    dbus_connection_unref(conn);
+
+    return FALSE;
+}
+
+gboolean dbus_client_add_disconnect_watch(GDBusClient* client,
+    GDBusWatchFunction function, void* user_data, DBusFreeFunction destroy)
 {
     struct disconnect_data* dc_data;
 
+    dbus_connection_set_exit_on_disconnect(client->dbus_conn, FALSE);
+
     dc_data = calloc(1, sizeof(struct disconnect_data));
+    if (dc_data == NULL)
+        return FALSE;
 
     dc_data->function = function;
     dc_data->user_data = user_data;
 
-    dbus_connection_set_exit_on_disconnect(connection, FALSE);
-
-    if (dbus_add_signal_watch(connection, NULL, NULL,
+    if (dbus_add_signal_watch(client->watcher, NULL, NULL,
             DBUS_INTERFACE_LOCAL, "Disconnected",
             disconnected_signal, dc_data, free)
         == 0) {
@@ -401,6 +398,6 @@ gboolean dbus_set_disconnect_function(DBusConnection* connection,
         return FALSE;
     }
 
-    dbus_connection_ref(connection);
+    dbus_connection_ref(client->dbus_conn);
     return TRUE;
 }

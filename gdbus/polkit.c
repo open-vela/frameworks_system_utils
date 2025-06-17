@@ -17,12 +17,9 @@
 #include <errno.h>
 #include <stdlib.h>
 
-#include "gdbus.h"
 #include <dbus/dbus.h>
 
-#define info(fmt...)
-#define error(fmt...)
-#define debug(fmt...)
+#include "gdbus-internal.h"
 
 #define POLICY_KIT_DBUS_NAME "org.freedesktop.PolicyKit1"
 #define POLICY_KIT_INTERFACE "org.freedesktop.PolicyKit1.Authority"
