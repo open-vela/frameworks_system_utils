@@ -113,7 +113,7 @@ struct get_prop_handler {
     GDBusPropIterFunction prop_iter_cb;
     pthread_cond_t cond;
     pthread_mutex_t mutex;
-    gboolean result;
+    int result;
 };
 
 struct pending_call_async {
@@ -989,10 +989,14 @@ gboolean dbus_proxy_get_property_iter_cb(GDBusProxy* proxy, const char* name,
 {
     DBusMessageIter iter;
     uv_thread_t self_tid = uv_thread_self();
-    GDBusClient* client = proxy->client;
+    GDBusClient* client = NULL;
     gboolean ret = FALSE;
 
-    if (proxy == NULL || name == NULL || client == NULL)
+    if (proxy == NULL || name == NULL)
+        return FALSE;
+
+    client = proxy->client;
+    if (client == NULL)
         return FALSE;
 
     if (uv_thread_equal(&self_tid, &client->main_thread) != 0) {
@@ -1012,7 +1016,7 @@ gboolean dbus_proxy_get_property_iter_cb(GDBusProxy* proxy, const char* name,
     pthread_cond_init(&prop_hdl->cond, NULL);
     prop_hdl->prop_value = value;
     prop_hdl->prop_iter_cb = iter_cb;
-    prop_hdl->result = FALSE;
+    prop_hdl->result = -1;
 
     client_async_handler* async_hdl = new_client_async_handler(ASYNC_HDL_GET_PROP, prop_hdl);
     pthread_mutex_lock(&prop_hdl->mutex);
@@ -1022,9 +1026,13 @@ gboolean dbus_proxy_get_property_iter_cb(GDBusProxy* proxy, const char* name,
         return FALSE;
     }
 
-    pthread_cond_wait(&prop_hdl->cond, &prop_hdl->mutex);
+    while (prop_hdl->result == -1)
+        pthread_cond_wait(&prop_hdl->cond, &prop_hdl->mutex);
+
+    if (prop_hdl->result == TRUE)
+        ret = TRUE;
+
     pthread_mutex_unlock(&prop_hdl->mutex);
-    ret = prop_hdl->result;
     free(prop_hdl);
     return ret;
 }
