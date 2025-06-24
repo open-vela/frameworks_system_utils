@@ -127,6 +127,51 @@ int property_set(const char* key, const char* value)
 }
 
 /****************************************************************************
+ * Name: property_get_with_err
+ *
+ * Description:
+ *   Retrieve Key-Values from database.
+ *
+ * Input Parameters:
+ *   const char* key: entry key string
+ *   char* value: not NULL : pointer to string buffer
+ *                NULL     : check whether this [key, value] exists
+ *
+ * Returned Value:
+ *   On success returns the length of the value which will never be greater
+ *   than PROP_NAME_MAX - 1 and will always be zero terminated.
+ *   (the length does not include the terminating zero).
+ *   On failure returns negative value.
+ *
+ ****************************************************************************/
+
+int property_get_with_err(const char* key, char* value)
+{
+    /* in environment variable? */
+    const char* env = getenv(key);
+    if (env) {
+        size_t len = strlen(env);
+        if (len >= PROP_VALUE_MAX)
+            return -E2BIG;
+
+        if (value)
+            memcpy(value, env, len + 1);
+
+        return len;
+    }
+
+    ssize_t ret = property_get_binary(key, value, PROP_VALUE_MAX);
+    if (ret == 0) {
+        return -ENODATA;
+    } else if (ret > 0) {
+        *(value + ret) = '\0';
+        return strlen(value);
+    }
+
+    return ret;
+}
+
+/****************************************************************************
  * Name: property_get
  *
  * Description:
@@ -148,20 +193,7 @@ int property_set(const char* key, const char* value)
 
 int property_get(const char* key, char* value, const char* default_value)
 {
-    /* in environment variable? */
-    const char* env = getenv(key);
-    if (env) {
-        size_t len = strlen(env);
-        if (len >= PROP_VALUE_MAX)
-            return -E2BIG;
-
-        if (value)
-            memcpy(value, env, len + 1);
-
-        return len;
-    }
-
-    ssize_t ret = property_get_binary(key, value, PROP_VALUE_MAX);
+    int ret = property_get_with_err(key, value);
     if (ret <= 0) {
         if (!default_value)
             return -EINVAL;
@@ -170,8 +202,8 @@ int property_get(const char* key, char* value, const char* default_value)
             memcpy(value, default_value, len + 1);
         return len;
     }
-    *(value + ret) = '\0';
-    return strlen(value);
+
+    return ret;
 }
 
 /****************************************************************************
@@ -234,6 +266,57 @@ int property_set_bool_oneway(const char* key, int8_t value)
 }
 
 /****************************************************************************
+ * Name: property_get_bool_with_err
+ *
+ * Description:
+ *   Retrieve a Key-Value from backend and interpret the value as boolean.
+ *   This is modified from Android libcutils:
+ *   https://android.googlesource.com/platform/system/core/+/master/libcutils/
+ *   properties.cpp
+ *
+ * Input Parameters:
+ *   const char* key: entry key string
+ *   int8_t* value: the entry value
+ *
+ * Returned Value:
+ *   On success returns zero.
+ *   On failure returns non-zero.
+ *
+ ****************************************************************************/
+
+int property_get_bool_with_err(const char* key, int8_t* value)
+{
+    char buf[PROP_VALUE_MAX];
+
+    if (value == NULL)
+        return -EINVAL;
+
+    int len = property_get_with_err(key, buf);
+    if (len < 0)
+        return len;
+    if (len == 1) {
+        char ch = buf[0];
+        if (ch == '0' || ch == 'n') {
+            *value = 0;
+            return 0;
+        } else if (ch == '1' || ch == 'y') {
+            *value = 1;
+            return 0;
+        }
+    } else if (len > 1) {
+        if (!strcmp(buf, "no") || !strcmp(buf, "false") || !strcmp(buf, "off")) {
+            *value = 0;
+            return 0;
+        } else if (!strcmp(buf, "yes") || !strcmp(buf, "true") || !strcmp(buf, "on")) {
+            *value = 1;
+            return 0;
+        }
+    }
+
+    return -ENODATA;
+}
+
+/****************************************************************************
  * Name: property_get_bool
  *
  * Description:
@@ -254,22 +337,10 @@ int property_set_bool_oneway(const char* key, int8_t value)
 
 int8_t property_get_bool(const char* key, int8_t default_value)
 {
-    char buf[PROP_VALUE_MAX];
-    int len = property_get(key, buf, NULL);
-    if (len == 1) {
-        char ch = buf[0];
-        if (ch == '0' || ch == 'n')
-            return 0;
-        else if (ch == '1' || ch == 'y')
-            return 1;
-    } else if (len > 1) {
-        if (!strcmp(buf, "no") || !strcmp(buf, "false") || !strcmp(buf, "off"))
-            return 0;
-        else if (!strcmp(buf, "yes") || !strcmp(buf, "true") || !strcmp(buf, "on"))
-            return 1;
-    }
+    int8_t value;
+    int ret = property_get_bool_with_err(key, &value);
 
-    return default_value;
+    return ret ? default_value : value;
 }
 
 /****************************************************************************
@@ -306,6 +377,46 @@ int property_set_int32_oneway(const char* key, int32_t value)
 }
 
 /****************************************************************************
+ * Name: property_get_int32_with_err
+ *
+ * Description:
+ *   Retrieve a Key-Value from backend and interpret the value as int32_t.
+ *   This is modified from Android libcutils:
+ *   https://android.googlesource.com/platform/system/core/+/master/libcutils/
+ *   properties.cpp
+ *
+ * Input Parameters:
+ *   const char* key: entry key string
+ *   int32_t* value: the entry value
+ *
+ * Returned Value:
+ *   On success returns zero.
+ *   On failure returns non-zero.
+ *
+ ****************************************************************************/
+
+int property_get_int32_with_err(const char* key, int32_t* value)
+{
+    char buf[PROP_VALUE_MAX];
+
+    if (value == NULL)
+        return -EINVAL;
+
+    int32_t ret = property_get_with_err(key, buf);
+    if (ret < 0)
+        return ret;
+
+    errno = 0;
+    char* end;
+    ret = strtol(buf, &end, 0);
+    if (errno || *end || buf == end)
+        return -ENODATA;
+
+    *value = ret;
+    return 0;
+}
+
+/****************************************************************************
  * Name: property_get_int32
  *
  * Description:
@@ -326,17 +437,10 @@ int property_set_int32_oneway(const char* key, int32_t value)
 
 int32_t property_get_int32(const char* key, int32_t default_value)
 {
-    char value[PROP_VALUE_MAX];
-    if (property_get(key, value, NULL) < 0)
-        return default_value;
+    int32_t value;
+    int ret = property_get_int32_with_err(key, &value);
 
-    errno = 0;
-    char* end;
-    int32_t ret = strtol(value, &end, 0);
-    if (errno || *end || value == end)
-        return default_value;
-
-    return ret;
+    return ret ? default_value : value;
 }
 
 /****************************************************************************
@@ -373,6 +477,46 @@ int property_set_int64_oneway(const char* key, int64_t value)
 }
 
 /****************************************************************************
+ * Name: property_get_int64_with_err
+ *
+ * Description:
+ *   Retrieve a Key-Value from backend and interpret the value as int64_t.
+ *   This is modified from Android libcutils:
+ *   https://android.googlesource.com/platform/system/core/+/master/libcutils/
+ *   properties.cpp
+ *
+ * Input Parameters:
+ *   const char* key: entry key string
+ *   int64_t* value: the entry value
+ *
+ * Returned Value:
+ *   On success returns zero.
+ *   On failure returns non-zero.
+ *
+ ****************************************************************************/
+
+int property_get_int64_with_err(const char* key, int64_t* value)
+{
+    char buf[PROP_VALUE_MAX];
+
+    if (value == NULL)
+        return -EINVAL;
+
+    int64_t ret = property_get_with_err(key, buf);
+    if (ret < 0)
+        return ret;
+
+    errno = 0;
+    char* end;
+    ret = strtoll(buf, &end, 0);
+    if (errno || *end || buf == end)
+        return -ENODATA;
+
+    *value = ret;
+    return 0;
+}
+
+/****************************************************************************
  * Name: property_get_int64
  *
  * Description:
@@ -393,17 +537,10 @@ int property_set_int64_oneway(const char* key, int64_t value)
 
 int64_t property_get_int64(const char* key, int64_t default_value)
 {
-    char value[PROP_VALUE_MAX];
-    if (property_get(key, value, NULL) < 0)
-        return default_value;
+    int64_t value;
+    int ret = property_get_int64_with_err(key, &value);
 
-    errno = 0;
-    char* end;
-    int64_t ret = strtoll(value, &end, 0);
-    if (errno || *end || value == end)
-        return default_value;
-
-    return ret;
+    return ret ? default_value : value;
 }
 
 /****************************************************************************

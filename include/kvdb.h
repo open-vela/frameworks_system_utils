@@ -163,6 +163,39 @@ ssize_t property_get_binary(const char* key, void* value, size_t val_len);
  * @Returns 0 on success, <0 if all databases failed to open.
  */
 int property_list_binary(void (*propfn)(const char* key, const void* value, size_t val_len, void* cookie), void* cookie);
+
+/**
+ * @Get property with an error param
+ * @param[in]  key entry key string
+ * @param[out] value entry
+ * @Retruns >0 length of the value, <0 if failed.
+ */
+int property_get_with_err(const char* key, char* value);
+
+/**
+ * @Get bool property with an error param
+ * @param[in]  key entry key string
+ * @param[out] value entry
+ * @Retruns =0 if success !=0 if failed.
+ */
+int property_get_bool_with_err(const char* key, int8_t* value);
+
+/**
+ * @Get int32 property with an error param
+ * @param[in]  key entry key string
+ * @param[out] value entry
+ * @Retruns =0 if success !=0 if failed.
+ */
+int property_get_int32_with_err(const char* key, int32_t* value);
+
+/**
+ * @Get int64 property with an error param
+ * @param[in]  key entry key string
+ * @param[out] value entry
+ * @Retruns =0 if success !=0 if failed.
+ */
+int property_get_int64_with_err(const char* key, int64_t* value);
+
 #if defined(__cplusplus)
 }
 #endif
