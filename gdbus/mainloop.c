@@ -1,11 +1,20 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
 /*
+ * Copyright (c) 2024 Xiaomi Technologies Co., Ltd.
+ * All rights reserved.
  *
- *  D-Bus helper library
+ * This file is part of the Xiaomi project.
  *
- *  Copyright (C) 2004-2011  Marcel Holtmann <marcel@holtmann.org>
+ * This source code is licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include <dbus/dbus.h>
@@ -359,6 +368,7 @@ gboolean dbus_request_name(DBusConnection* connection, const char* name,
 struct disconnect_data {
     GDBusWatchFunction function;
     void* user_data;
+    GDBusWatch* watcher;
 };
 
 static gboolean disconnected_signal(DBusConnection* conn,
@@ -366,11 +376,13 @@ static gboolean disconnected_signal(DBusConnection* conn,
 {
     struct disconnect_data* dc_data = data;
 
-    error("Got disconnected from the system message bus");
+    info("Got disconnected from the system message bus");
 
     dc_data->function(conn, dc_data->user_data);
 
     dbus_connection_unref(conn);
+
+    dbus_watch_set_connection_state(dc_data->watcher, TRUE);
 
     return FALSE;
 }
@@ -388,6 +400,7 @@ gboolean dbus_client_add_disconnect_watch(GDBusClient* client,
 
     dc_data->function = function;
     dc_data->user_data = user_data;
+    dc_data->watcher = client->watcher;
 
     if (dbus_add_signal_watch(client->watcher, NULL, NULL,
             DBUS_INTERFACE_LOCAL, "Disconnected",

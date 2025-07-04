@@ -1,11 +1,17 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
 /*
+ * Copyright (C) 2025 Xiaomi Corporation
  *
- *  D-Bus helper library
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *  Copyright (C) 2004-2011  Marcel Holtmann <marcel@holtmann.org>
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
- *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 #include <stdio.h>
@@ -15,6 +21,11 @@
 #include <dbus/dbus-string.h>
 #include <dbus/dbus.h>
 #include <uv.h>
+
+#ifdef __NuttX__
+#include <nuttx/tls.h>
+#include <pthread.h>
+#endif
 
 #include "gdbus-internal.h"
 
@@ -27,6 +38,16 @@
 #ifndef DBUS_ERROR_PROPERTY_READ_ONLY
 #define DBUS_ERROR_PROPERTY_READ_ONLY "org.freedesktop.DBus.Error.PropertyReadOnly"
 #endif
+
+#define G_DBUS_ANNOTATE(name_, value_)                     \
+    "<annotation name=\"org.freedesktop.DBus." name_ "\" " \
+    "value=\"" value_ "\"/>"
+
+#define G_DBUS_ANNOTATE_DEPRECATED \
+    G_DBUS_ANNOTATE("Deprecated", "true")
+
+#define G_DBUS_ANNOTATE_NOREPLY \
+    G_DBUS_ANNOTATE("Method.NoReply", "true")
 
 struct generic_data {
     unsigned int refcount;
@@ -65,14 +86,100 @@ struct property_data {
     DBusMessage* message;
 };
 
-static int global_flags = 0;
-static struct generic_data* root;
-static DBusList* pending = NULL;
+typedef struct {
+    int global_flags;
+    struct generic_data* root;
+    DBusList* generic_pending;
+
+    GDBusPendingReply next_pending;
+    DBusList* pending_security;
+
+    const GDBusSecurityTable* security_table;
+    GDBusPendingPropertySet next_pending_property;
+    DBusList* pending_property_set;
+} gdbus_object_globals;
 
 static void process_changes(uv_idle_t* handle);
 static void process_properties_from_interface(struct generic_data* data,
     struct interface_data* iface);
 static void process_property_changes(struct generic_data* data);
+
+#if defined(CONFIG_BUILD_FLAT) || defined(CONFIG_BUILD_PROTECTED)
+/* TLS index for gdbus_object_t */
+static int gdbus_object_tls_index;
+
+/* Init once only by uv_once */
+static void gdbus_object_index_alloc(void)
+{
+    gdbus_object_tls_index = task_tls_alloc(dbus_free);
+
+    ASSERT(gdbus_object_tls_index >= 0);
+}
+
+static gdbus_object_globals* gdbus_object_get(void)
+{
+    static pthread_once_t once_guard = PTHREAD_ONCE_INIT;
+    gdbus_object_globals* gdbus_object = NULL;
+
+    pthread_once(&once_guard, gdbus_object_index_alloc);
+
+    gdbus_object = (gdbus_object_globals*)task_tls_get_value(gdbus_object_tls_index);
+    if (gdbus_object == NULL) {
+        gdbus_object = calloc(1, sizeof(gdbus_object_globals));
+        if (gdbus_object != NULL) {
+            gdbus_object->global_flags = 0;
+            gdbus_object->root = NULL;
+            gdbus_object->generic_pending = NULL;
+            gdbus_object->next_pending = 1;
+            gdbus_object->pending_security = NULL;
+            gdbus_object->security_table = NULL;
+            gdbus_object->next_pending_property = 1;
+            gdbus_object->pending_property_set = NULL;
+            task_tls_set_value(gdbus_object_tls_index, (uintptr_t)gdbus_object);
+        }
+    }
+
+    _dbus_assert(gdbus_object != NULL);
+    return gdbus_object;
+}
+#else
+/* Kernel build should use gdbus_object */
+static gdbus_object_globals* gdbus_object_get(void)
+{
+    static gdbus_object_globals gdbus_object = {
+        .global_flags = 0,
+        .root = NULL,
+        .generic_pending = NULL,
+        .next_pending = 1,
+        .pending_security = NULL,
+        .security_table = NULL,
+        .next_pending_property = 1,
+        .pending_property_set = NULL,
+    };
+
+    return &gdbus_object;
+}
+#endif
+
+#define global_flags gdbus_object_get()->global_flags
+#define root gdbus_object_get()->root
+#define generic_pending gdbus_object_get()->generic_pending
+#define next_pending gdbus_object_get()->next_pending
+#define pending_security gdbus_object_get()->pending_security
+#define security_table gdbus_object_get()->security_table
+#define next_pending_property gdbus_object_get()->next_pending_property
+#define pending_property_set gdbus_object_get()->pending_property_set
+
+static int strcmp0(const char* str1, const char* str2)
+{
+    if (str1 == NULL)
+        return -(str1 != str2);
+
+    if (str2 == NULL)
+        return -(str1 != str2);
+
+    return strcmp(str1, str2);
+}
 
 static char* strdup0(const char* str)
 {
@@ -82,10 +189,10 @@ static char* strdup0(const char* str)
     return NULL;
 }
 
-static void print_arguments(DBusString* str, const GDBusArgInfo* args,
+static void append_arguments_printf(DBusString* str, const GDBusArgInfo* args,
     const char* direction)
 {
-    for (; args && args->name; args++) {
+    while (args && args->name) {
         _dbus_string_append_printf(str,
             "<arg name=\"%s\" type=\"%s\"",
             args->name, args->signature);
@@ -95,18 +202,10 @@ static void print_arguments(DBusString* str, const GDBusArgInfo* args,
                 " direction=\"%s\"/>\n", direction);
         else
             _dbus_string_append_printf(str, "/>\n");
+
+        args++;
     }
 }
-
-#define G_DBUS_ANNOTATE(name_, value_)                     \
-    "<annotation name=\"org.freedesktop.DBus." name_ "\" " \
-    "value=\"" value_ "\"/>"
-
-#define G_DBUS_ANNOTATE_DEPRECATED \
-    G_DBUS_ANNOTATE("Deprecated", "true")
-
-#define G_DBUS_ANNOTATE_NOREPLY \
-    G_DBUS_ANNOTATE("Method.NoReply", "true")
 
 static gboolean check_experimental(int flags, int flag)
 {
@@ -116,107 +215,132 @@ static gboolean check_experimental(int flags, int flag)
     return !(global_flags & G_DBUS_FLAG_ENABLE_EXPERIMENTAL);
 }
 
+static void append_annotation(DBusString* str, int flags,
+    int flag_type, const char* append_annotate)
+{
+    if (flags & flag_type) {
+        _dbus_string_append_printf(str, append_annotate);
+    }
+}
+
+static void generate_method_xml(DBusString* str, const GDBusMethodTable* method)
+{
+    if (check_experimental(method->flags, G_DBUS_METHOD_FLAG_EXPERIMENTAL))
+        return;
+
+    _dbus_string_append_printf(str, "<method name=\"%s\">", method->name);
+    append_arguments_printf(str, method->in_args, "in");
+    append_arguments_printf(str, method->out_args, "out");
+
+    append_annotation(str, method->flags, G_DBUS_METHOD_FLAG_DEPRECATED,
+        G_DBUS_ANNOTATE_DEPRECATED);
+    append_annotation(str, method->flags, G_DBUS_METHOD_FLAG_NOREPLY,
+        G_DBUS_ANNOTATE_NOREPLY);
+
+    _dbus_string_append_printf(str, "</method>");
+}
+
+static void generate_signal_xml(DBusString* str, const GDBusSignalTable* signal)
+{
+    if (check_experimental(signal->flags, G_DBUS_SIGNAL_FLAG_EXPERIMENTAL))
+        return;
+
+    _dbus_string_append_printf(str, "<signal name=\"%s\">", signal->name);
+    append_arguments_printf(str, signal->args, NULL);
+
+    append_annotation(str, signal->flags, G_DBUS_SIGNAL_FLAG_DEPRECATED,
+        G_DBUS_ANNOTATE_DEPRECATED);
+    _dbus_string_append_printf(str, "</signal>\n");
+}
+
+static void generate_property_xml(DBusString* str, const GDBusPropertyTable* property)
+{
+    if (check_experimental(property->flags, G_DBUS_PROPERTY_FLAG_EXPERIMENTAL))
+        return;
+
+    _dbus_string_append_printf(str, "<property name=\"%s\" type=\"%s\" access=\"%s%s\">",
+        property->name, property->type,
+        property->get ? "read" : "",
+        property->set ? "write" : "");
+
+    append_annotation(str, property->flags, G_DBUS_PROPERTY_FLAG_DEPRECATED,
+        G_DBUS_ANNOTATE_DEPRECATED);
+    _dbus_string_append_printf(str, "</property>");
+}
+
 static void generate_interface_xml(DBusString* str, struct interface_data* iface)
 {
-    const GDBusMethodTable* method;
-    const GDBusSignalTable* signal;
-    const GDBusPropertyTable* property;
-
-    for (method = iface->methods; method && method->name; method++) {
-        if (check_experimental(method->flags,
-                G_DBUS_METHOD_FLAG_EXPERIMENTAL))
-            continue;
-
-        _dbus_string_append_printf(str, "<method name=\"%s\">",
-            method->name);
-        print_arguments(str, method->in_args, "in");
-        print_arguments(str, method->out_args, "out");
-
-        if (method->flags & G_DBUS_METHOD_FLAG_DEPRECATED)
-            _dbus_string_append_printf(str,
-                G_DBUS_ANNOTATE_DEPRECATED);
-
-        if (method->flags & G_DBUS_METHOD_FLAG_NOREPLY)
-            _dbus_string_append_printf(str, G_DBUS_ANNOTATE_NOREPLY);
-
-        _dbus_string_append_printf(str, "</method>");
+    const GDBusMethodTable* method = iface->methods;
+    while (method && method->name) {
+        generate_method_xml(str, method);
+        method++;
     }
 
-    for (signal = iface->signals; signal && signal->name; signal++) {
-        if (check_experimental(signal->flags,
-                G_DBUS_SIGNAL_FLAG_EXPERIMENTAL))
-            continue;
-
-        _dbus_string_append_printf(str, "<signal name=\"%s\">",
-            signal->name);
-        print_arguments(str, signal->args, NULL);
-
-        if (signal->flags & G_DBUS_SIGNAL_FLAG_DEPRECATED)
-            _dbus_string_append_printf(str,
-                G_DBUS_ANNOTATE_DEPRECATED);
-
-        _dbus_string_append_printf(str, "</signal>\n");
+    const GDBusSignalTable* signal = iface->signals;
+    while (signal && signal->name) {
+        generate_signal_xml(str, signal);
+        signal++;
     }
 
-    for (property = iface->properties; property && property->name;
-         property++) {
-        if (check_experimental(property->flags,
-                G_DBUS_PROPERTY_FLAG_EXPERIMENTAL))
-            continue;
+    const GDBusPropertyTable* property = iface->properties;
+    while (property && property->name) {
+        generate_property_xml(str, property);
+        property++;
+    }
+}
 
-        _dbus_string_append_printf(str, "<property name=\"%s\""
-                                        " type=\"%s\" access=\"%s%s\">",
-            property->name, property->type,
-            property->get ? "read" : "",
-            property->set ? "write" : "");
+static void append_xml_header_node_begin(DBusString* str)
+{
+    _dbus_string_append_printf(str, DBUS_INTROSPECT_1_0_XML_DOCTYPE_DECL_NODE);
+    _dbus_string_append_printf(str, "<node>");
+}
 
-        if (property->flags & G_DBUS_PROPERTY_FLAG_DEPRECATED)
-            _dbus_string_append_printf(str,
-                G_DBUS_ANNOTATE_DEPRECATED);
+static void append_xml_node_end(DBusString* str)
+{
+    _dbus_string_append_printf(str, "</node>");
+}
 
-        _dbus_string_append_printf(str, "</property>");
+static void append_interfaces_xml(DBusString* str, DBusList* interfaces)
+{
+    DBusList* list = _dbus_list_get_first_link(&interfaces);
+    while (list != NULL) {
+        struct interface_data* iface = list->data;
+        _dbus_string_append_printf(str, "<interface name=\"%s\">", iface->name);
+        generate_interface_xml(str, iface);
+        _dbus_string_append_printf(str, "</interface>");
+        list = _dbus_list_get_next_link(&interfaces, list);
+    }
+}
+
+static void append_child_nodes_xml(DBusString* str, DBusConnection* conn, const char* path)
+{
+    char** children = NULL;
+    if (dbus_connection_list_registered(conn, path, &children)) {
+        for (int i = 0; children[i]; i++) {
+            _dbus_string_append_printf(str, "<node name=\"%s\"/>", children[i]);
+        }
+        dbus_free_string_array(children);
     }
 }
 
 static void generate_introspection_xml(DBusConnection* conn,
     struct generic_data* data, const char* path)
 {
-    DBusList* list;
     DBusString str;
-    char** children;
-    int i;
 
     free(data->introspect);
+    data->introspect = NULL;
 
-    if (!_dbus_string_init(&str))
+    if (!_dbus_string_init(&str)) {
         return;
-
-    _dbus_string_append_printf(&str, DBUS_INTROSPECT_1_0_XML_DOCTYPE_DECL_NODE);
-    _dbus_string_append_printf(&str, "<node>");
-
-    for (list = _dbus_list_get_first_link(&data->interfaces); list;
-         list = _dbus_list_get_next_link(&data->interfaces, list)) {
-        struct interface_data* iface = list->data;
-
-        _dbus_string_append_printf(&str, "<interface name=\"%s\">",
-            iface->name);
-
-        generate_interface_xml(&str, iface);
-
-        _dbus_string_append_printf(&str, "</interface>");
     }
 
-    if (!dbus_connection_list_registered(conn, path, &children))
-        goto done;
+    append_xml_header_node_begin(&str);
 
-    for (i = 0; children[i]; i++)
-        _dbus_string_append_printf(&str, "<node name=\"%s\"/>",
-            children[i]);
+    append_interfaces_xml(&str, data->interfaces);
+    append_child_nodes_xml(&str, conn, path);
 
-    dbus_free_string_array(children);
-
-done:
-    _dbus_string_append_printf(&str, "</node>");
+    append_xml_node_end(&str);
 
     _dbus_string_copy_data(&str, &data->introspect);
     _dbus_string_free(&str);
@@ -269,19 +393,14 @@ static DBusHandlerResult process_message(DBusConnection* connection,
     return DBUS_HANDLER_RESULT_HANDLED;
 }
 
-static GDBusPendingReply next_pending = 1;
-static DBusList* pending_security = NULL;
-
-static const GDBusSecurityTable* security_table = NULL;
-
 void dbus_pending_success(DBusConnection* connection,
     GDBusPendingReply pending_reply)
 {
-    DBusList* list;
+    DBusList* list = _dbus_list_get_first_link(&pending_security);
 
-    for (list = _dbus_list_get_first_link(&pending_security); list;
-         list = _dbus_list_get_next_link(&pending_security, list)) {
+    while (list) {
         struct security_data* secdata = list->data;
+        list = _dbus_list_get_next_link(&pending_security, list);
 
         if (secdata->pending != pending_reply)
             continue;
@@ -301,23 +420,21 @@ void dbus_pending_error_valist(DBusConnection* connection,
     GDBusPendingReply pending_reply, const char* name,
     const char* format, va_list args)
 {
-    DBusList* list;
+    DBusList* list = _dbus_list_get_first_link(&pending_security);
 
-    for (list = _dbus_list_get_first_link(&pending_security); list;
-         list = _dbus_list_get_next_link(&pending_security, list)) {
+    while (list != NULL) {
         struct security_data* secdata = list->data;
+        DBusList* next = _dbus_list_get_next_link(&pending_security, list);
 
-        if (secdata->pending != pending_reply)
-            continue;
+        if (secdata->pending == pending_reply) {
+            _dbus_list_remove(&pending_security, secdata);
+            dbus_send_error_valist(connection, secdata->message, name, format, args);
+            dbus_message_unref(secdata->message);
+            free(secdata);
+            return;
+        }
 
-        _dbus_list_remove(&pending_security, secdata);
-
-        dbus_send_error_valist(connection, secdata->message,
-            name, format, args);
-
-        dbus_message_unref(secdata->message);
-        free(secdata);
-        return;
+        list = next;
     }
 }
 
@@ -360,6 +477,11 @@ static void builtin_security_function(DBusConnection* conn,
     struct builtin_security_data* data;
 
     data = calloc(1, sizeof(struct builtin_security_data));
+    if (data == NULL) {
+        dbus_pending_error(conn, pending_reply, DBUS_ERROR_NO_MEMORY,
+            "Failed to allocate memory for security data");
+        return;
+    }
     data->conn = conn;
     data->pending = pending_reply;
 
@@ -372,66 +494,56 @@ static void builtin_security_function(DBusConnection* conn,
 static gboolean check_privilege(DBusConnection* conn, DBusMessage* msg,
     const GDBusMethodTable* method, void* iface_user_data)
 {
-    const GDBusSecurityTable* security;
+    gboolean interaction = FALSE;
+    const GDBusSecurityTable* security = security_table;
 
-    for (security = security_table; security && security->privilege;
-         security++) {
-        struct security_data* secdata;
-        gboolean interaction;
+    while (security && security->privilege) {
+        if (security->privilege == method->privilege) {
+            struct security_data* secdata = calloc(1, sizeof(struct security_data));
+            if (secdata == NULL) {
+                error("Failed to allocate memory for security data");
+                return FALSE;
+            }
+            secdata->pending = next_pending++;
+            secdata->message = dbus_message_ref(msg);
+            secdata->method = method;
+            secdata->iface_user_data = iface_user_data;
 
-        if (security->privilege != method->privilege)
-            continue;
+            _dbus_list_prepend(&pending_security, secdata);
 
-        secdata = calloc(1, sizeof(struct security_data));
-        secdata->pending = next_pending++;
-        secdata->message = dbus_message_ref(msg);
-        secdata->method = method;
-        secdata->iface_user_data = iface_user_data;
+            interaction = (security->flags & G_DBUS_SECURITY_FLAG_ALLOW_INTERACTION)
+                ? TRUE
+                : FALSE;
 
-        _dbus_list_prepend(&pending_security, secdata);
+            if (!(security->flags & G_DBUS_SECURITY_FLAG_BUILTIN) && security->function) {
+                security->function(conn, security->action, interaction, secdata->pending);
+            } else {
+                builtin_security_function(conn, security->action, interaction,
+                    secdata->pending);
+            }
 
-        if (security->flags & G_DBUS_SECURITY_FLAG_ALLOW_INTERACTION)
-            interaction = TRUE;
-        else
-            interaction = FALSE;
-
-        if (!(security->flags & G_DBUS_SECURITY_FLAG_BUILTIN) && security->function)
-            security->function(conn, security->action,
-                interaction, secdata->pending);
-        else
-            builtin_security_function(conn, security->action,
-                interaction, secdata->pending);
-
-        return TRUE;
+            return TRUE;
+        }
+        security++;
     }
 
     return FALSE;
 }
 
-static GDBusPendingPropertySet next_pending_property = 1;
-static DBusList* pending_property_set;
-
-static struct property_data* remove_pending_property_data(
-    GDBusPendingPropertySet id)
+static struct property_data* remove_pending_property_data(GDBusPendingPropertySet id)
 {
-    struct property_data* propdata;
-    DBusList* l;
+    DBusList* l = _dbus_list_get_first_link(&pending_property_set);
 
-    for (l = _dbus_list_get_first_link(&pending_property_set); l;
-         l = _dbus_list_get_next_link(&pending_property_set, l)) {
-        propdata = l->data;
-        if (propdata->id != id)
-            continue;
-
-        break;
+    while (l != NULL) {
+        struct property_data* propdata = l->data;
+        if (propdata->id == id) {
+            _dbus_list_remove_link(&pending_property_set, l);
+            return propdata;
+        }
+        l = _dbus_list_get_next_link(&pending_property_set, l);
     }
 
-    if (l == NULL)
-        return NULL;
-
-    _dbus_list_remove_link(&pending_property_set, l);
-
-    return propdata;
+    return NULL;
 }
 
 void dbus_pending_property_success(GDBusPendingPropertySet id)
@@ -502,11 +614,10 @@ static void append_property(struct interface_data* iface,
     dbus_message_iter_close_container(dict, &entry);
 }
 
-static void append_properties(struct interface_data* data,
-    DBusMessageIter* iter)
+static void append_properties(struct interface_data* data, DBusMessageIter* iter)
 {
     DBusMessageIter dict;
-    const GDBusPropertyTable* p;
+    const GDBusPropertyTable* p = data->properties;
 
     dbus_message_iter_open_container(iter, DBUS_TYPE_ARRAY,
         DBUS_DICT_ENTRY_BEGIN_CHAR_AS_STRING
@@ -515,18 +626,13 @@ static void append_properties(struct interface_data* data,
                     DBUS_DICT_ENTRY_END_CHAR_AS_STRING,
         &dict);
 
-    for (p = data->properties; p && p->name; p++) {
-        if (check_experimental(p->flags,
-                G_DBUS_PROPERTY_FLAG_EXPERIMENTAL))
-            continue;
-
-        if (p->get == NULL)
-            continue;
-
-        if (p->exists != NULL && !p->exists(p, data->user_data))
-            continue;
-
-        append_property(data, p, &dict);
+    while (p && p->name) {
+        if (!check_experimental(p->flags, G_DBUS_PROPERTY_FLAG_EXPERIMENTAL)
+            && p->get != NULL
+            && (p->exists == NULL || p->exists(p, data->user_data))) {
+            append_property(data, p, &dict);
+        }
+        p++;
     }
 
     dbus_message_iter_close_container(iter, &dict);
@@ -593,16 +699,17 @@ static void emit_interfaces_added(struct generic_data* data)
 static struct interface_data* find_interface(DBusList* interfaces,
     const char* name)
 {
-    DBusList* list;
+    DBusList* list = _dbus_list_get_first_link(&interfaces);
 
     if (name == NULL)
         return NULL;
 
-    for (list = _dbus_list_get_first_link(&interfaces); list;
-         list = _dbus_list_get_next_link(&interfaces, list)) {
+    while (list != NULL) {
         struct interface_data* iface = list->data;
-        if (!strcmp(name, iface->name))
+        if (!strcmp0(name, iface->name))
             return iface;
+
+        list = _dbus_list_get_next_link(&interfaces, list);
     }
 
     return NULL;
@@ -614,19 +721,18 @@ static gboolean dbus_args_have_signature(const GDBusArgInfo* args,
     const char* sig = dbus_message_get_signature(message);
     const char* p = NULL;
 
-    for (; args && args->signature && *sig; args++) {
+    while (args && args->signature && *sig) {
         p = args->signature;
 
-        for (; *sig && *p; sig++, p++) {
-            if (*p != *sig)
+        while (*sig && *p) {
+            if (*p++ != *sig++) {
                 return FALSE;
+            }
         }
+        args++;
     }
 
-    if (*sig || (p && *p) || (args && args->signature))
-        return FALSE;
-
-    return TRUE;
+    return !(*sig || (p && *p) || (args && args->signature));
 }
 
 static void add_pending(struct generic_data* data)
@@ -638,7 +744,7 @@ static void add_pending(struct generic_data* data)
         return;
     }
 
-    _dbus_list_append(&pending, data);
+    _dbus_list_append(&generic_pending, data);
 }
 
 static gboolean remove_interface(struct generic_data* data, const char* name)
@@ -737,7 +843,7 @@ static inline const GDBusPropertyTable* find_property(const GDBusPropertyTable* 
     const GDBusPropertyTable* p;
 
     for (p = properties; p && p->name; p++) {
-        if (strcmp(name, p->name) != 0)
+        if (strcmp0(name, p->name) != 0)
             continue;
 
         if (check_experimental(p->flags,
@@ -832,49 +938,72 @@ static DBusMessage* properties_get_all(DBusConnection* connection,
     return reply;
 }
 
+static char* validate_arguments(DBusMessage* message, DBusMessageIter* iter,
+    struct generic_data* data, struct interface_data** iface_out, const char** name)
+{
+    const char *interface = NULL;
+    char *error_msg = NULL;
+
+    do {
+        if (!dbus_message_iter_init(message, iter)) {
+            asprintf(&error_msg, "No arguments given");
+            break;
+        }
+
+        if (dbus_message_iter_get_arg_type(iter) != DBUS_TYPE_STRING) {
+            asprintf(&error_msg, "Invalid argument type: '%c'",
+                dbus_message_iter_get_arg_type(iter));
+            break;
+        }
+
+        dbus_message_iter_get_basic(iter, &interface);
+        dbus_message_iter_next(iter);
+
+        if (dbus_message_iter_get_arg_type(iter) != DBUS_TYPE_STRING) {
+            asprintf(&error_msg, "Invalid argument type: '%c'",
+                dbus_message_iter_get_arg_type(iter));
+            break;
+        }
+
+        dbus_message_iter_get_basic(iter, name);
+        dbus_message_iter_next(iter);
+
+        if (dbus_message_iter_get_arg_type(iter) != DBUS_TYPE_VARIANT) {
+            asprintf(&error_msg, "Invalid argument type: '%c'",
+                dbus_message_iter_get_arg_type(iter));
+            break;
+        }
+
+        *iface_out = find_interface(data->interfaces, interface);
+        if (*iface_out == NULL){
+            asprintf(&error_msg, "No such interface '%s'", interface);
+            break;
+        }
+
+    } while (0);
+
+    return error_msg;
+}
+
 static DBusMessage* properties_set(DBusConnection* connection,
     DBusMessage* message, void* user_data)
 {
     struct generic_data* data = user_data;
     DBusMessageIter iter, sub;
-    struct interface_data* iface;
+    struct interface_data* iface = NULL;
     const GDBusPropertyTable* property;
-    const char *name, *interface;
+    const char *name = NULL;
     struct property_data* propdata;
     gboolean valid_signature;
     char* signature;
 
-    if (!dbus_message_iter_init(message, &iter))
-        return dbus_create_error(message, DBUS_ERROR_INVALID_ARGS,
-            "No arguments given");
-
-    if (dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_STRING)
-        return dbus_create_error(message, DBUS_ERROR_INVALID_ARGS,
-            "Invalid argument type: '%c'",
-            dbus_message_iter_get_arg_type(&iter));
-
-    dbus_message_iter_get_basic(&iter, &interface);
-    dbus_message_iter_next(&iter);
-
-    if (dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_STRING)
-        return dbus_create_error(message, DBUS_ERROR_INVALID_ARGS,
-            "Invalid argument type: '%c'",
-            dbus_message_iter_get_arg_type(&iter));
-
-    dbus_message_iter_get_basic(&iter, &name);
-    dbus_message_iter_next(&iter);
-
-    if (dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_VARIANT)
-        return dbus_create_error(message, DBUS_ERROR_INVALID_ARGS,
-            "Invalid argument type: '%c'",
-            dbus_message_iter_get_arg_type(&iter));
-
-    dbus_message_iter_recurse(&iter, &sub);
-
-    iface = find_interface(data->interfaces, interface);
-    if (iface == NULL)
-        return dbus_create_error(message, DBUS_ERROR_INVALID_ARGS,
-            "No such interface '%s'", interface);
+     char *err_str = validate_arguments(message, &iter, data, &iface, &name);
+    if (err_str) {
+        DBusMessage* reply = dbus_create_error(message, DBUS_ERROR_INVALID_ARGS,
+            "%s", err_str);
+        free(err_str);
+        return reply;
+    }
 
     property = find_property(iface->properties, name);
     if (property == NULL)
@@ -892,8 +1021,9 @@ static DBusMessage* properties_set(DBusConnection* connection,
             DBUS_ERROR_UNKNOWN_PROPERTY,
             "No such property '%s'", name);
 
+    dbus_message_iter_recurse(&iter, &sub);
     signature = dbus_message_iter_get_signature(&sub);
-    valid_signature = strcmp(signature, property->type) ? FALSE : TRUE;
+    valid_signature = strcmp0(signature, property->type) ? FALSE : TRUE;
     dbus_free(signature);
     if (!valid_signature)
         return dbus_create_error(message,
@@ -901,6 +1031,11 @@ static DBusMessage* properties_set(DBusConnection* connection,
             "Invalid signature for '%s'", name);
 
     propdata = malloc(sizeof(struct property_data));
+    if (propdata == NULL) {
+        return dbus_create_error(message, DBUS_ERROR_NO_MEMORY,
+            "Failed to allocate memory for property data");
+    }
+
     propdata->id = next_pending_property++;
     propdata->message = dbus_message_ref(message);
     propdata->conn = connection;
@@ -978,7 +1113,7 @@ static void remove_pending(struct generic_data* data)
 {
     uv_idle_stop(&data->handle);
 
-    _dbus_list_remove(&pending, data);
+    _dbus_list_remove(&generic_pending, data);
 }
 
 static void process_changes(uv_idle_t* handle)
@@ -1151,6 +1286,62 @@ static const GDBusSignalTable manager_signals[] = {
     {}
 };
 
+static gboolean check_methods_experimental(const GDBusMethodTable* methods)
+{
+    const GDBusMethodTable* method = methods;
+    while (method && method->name) {
+        if (!check_experimental(method->flags, G_DBUS_METHOD_FLAG_EXPERIMENTAL))
+            return FALSE;
+        method++;
+    }
+    return TRUE;
+}
+
+static gboolean check_signals_experimental(const GDBusSignalTable* signals)
+{
+    const GDBusSignalTable* signal = signals;
+    while (signal && signal->name) {
+        if (!check_experimental(signal->flags, G_DBUS_SIGNAL_FLAG_EXPERIMENTAL))
+            return FALSE;
+        signal++;
+    }
+    return TRUE;
+}
+
+static gboolean check_properties_experimental(const GDBusPropertyTable* properties)
+{
+    const GDBusPropertyTable* property = properties;
+    while (property && property->name) {
+        if (!check_experimental(property->flags, G_DBUS_PROPERTY_FLAG_EXPERIMENTAL))
+            return FALSE;
+        property++;
+    }
+    return TRUE;
+}
+
+static struct interface_data* create_interface_data(const char* name,
+    const GDBusMethodTable* methods,
+    const GDBusSignalTable* signals,
+    const GDBusPropertyTable* properties,
+    void* user_data,
+    GDBusDestroyFunction destroy)
+{
+    struct interface_data* iface = calloc(1, sizeof(struct interface_data));
+    if (iface == NULL) {
+        error("Failed to allocate memory for interface data");
+        return NULL;
+    }
+
+    iface->name = strdup0(name);
+    iface->methods = methods;
+    iface->signals = signals;
+    iface->properties = properties;
+    iface->user_data = user_data;
+    iface->destroy = destroy;
+
+    return iface;
+}
+
 static gboolean add_interface(struct generic_data* data,
     const char* name,
     const GDBusMethodTable* methods,
@@ -1160,47 +1351,25 @@ static gboolean add_interface(struct generic_data* data,
     GDBusDestroyFunction destroy)
 {
     struct interface_data* iface;
-    const GDBusMethodTable* method;
-    const GDBusSignalTable* signal;
-    const GDBusPropertyTable* property;
 
-    for (method = methods; method && method->name; method++) {
-        if (!check_experimental(method->flags,
-                G_DBUS_METHOD_FLAG_EXPERIMENTAL))
-            goto done;
-    }
+    if (check_methods_experimental(methods)
+        && check_signals_experimental(signals)
+        && check_properties_experimental(properties)) {
+            info("Interface %s is experimental, Nothing to register", name);
+            return FALSE; 
+        }
+        
 
-    for (signal = signals; signal && signal->name; signal++) {
-        if (!check_experimental(signal->flags,
-                G_DBUS_SIGNAL_FLAG_EXPERIMENTAL))
-            goto done;
-    }
-
-    for (property = properties; property && property->name; property++) {
-        if (!check_experimental(property->flags,
-                G_DBUS_PROPERTY_FLAG_EXPERIMENTAL))
-            goto done;
-    }
-
-    /* Nothing to register */
-    return FALSE;
-
-done:
-    iface = calloc(1, sizeof(struct interface_data));
-    iface->name = strdup0(name);
-    iface->methods = methods;
-    iface->signals = signals;
-    iface->properties = properties;
-    iface->user_data = user_data;
-    iface->destroy = destroy;
+    iface = create_interface_data(name, methods, signals, properties, user_data, destroy);
+    if (iface == NULL)
+        return FALSE;
 
     _dbus_list_append(&data->interfaces, iface);
-    if (data->parent == NULL)
-        return TRUE;
 
-    _dbus_list_append(&data->added, iface);
-
-    add_pending(data);
+    if (data->parent) {
+        _dbus_list_append(&data->added, iface);
+        add_pending(data);
+    }
 
     return TRUE;
 }
@@ -1219,6 +1388,10 @@ static struct generic_data* object_path_ref(DBusConnection* connection,
     }
 
     data = calloc(1, sizeof(struct generic_data));
+    if (data == NULL) {
+        error("Failed to allocate memory for object path data");
+        return NULL;
+    }
     data->conn = dbus_connection_ref(connection);
     data->path = strdup0(path);
     data->refcount = 1;
@@ -1299,12 +1472,12 @@ static gboolean check_signal(DBusConnection* conn, const char* path,
     }
 
     for (signal = iface->signals; signal && signal->name; signal++) {
-        if (strcmp(signal->name, name) != 0)
+        if (strcmp0(signal->name, name) != 0)
             continue;
 
         if (signal->flags & G_DBUS_SIGNAL_FLAG_EXPERIMENTAL) {
             const char* env = getenv("GDBUS_EXPERIMENTAL");
-            if (env == NULL || strcmp(env, "1") != 0)
+            if (env == NULL || strcmp0(env, "1") != 0)
                 break;
         }
 
@@ -1479,11 +1652,11 @@ static void dbus_flush(DBusConnection* connection)
     DBusList* l;
     DBusList* next;
 
-    for (l = _dbus_list_get_first_link(&pending); l;) {
+    for (l = _dbus_list_get_first_link(&generic_pending); l;) {
         struct generic_data* data = l->data;
 
-        next = _dbus_list_get_next_link(&pending, l);
-        _dbus_list_remove_link(&pending, l);
+        next = _dbus_list_get_next_link(&generic_pending, l);
+        _dbus_list_remove_link(&generic_pending, l);
         l = next;
 
         if (data->conn != connection)
@@ -1667,24 +1840,60 @@ static void dbus_list_reverse(DBusList** list)
     *list = last;
 }
 
+static DBusMessage* create_properties_changed_signal(struct generic_data* data,
+    struct interface_data* iface)
+{
+    DBusMessage* signal = dbus_message_new_signal(data->path,
+        DBUS_INTERFACE_PROPERTIES, "PropertiesChanged");
+    if (!signal) {
+        error("Unable to allocate new " DBUS_INTERFACE_PROPERTIES
+              ".PropertiesChanged signal");
+    }
+    return signal;
+}
+
+static void process_valid_properties(struct interface_data* iface,
+    DBusMessageIter* dict, DBusList** invalidated)
+{
+    DBusList* list = _dbus_list_get_first_link(&iface->pending_prop);
+    while (list != NULL) {
+        GDBusPropertyTable* p = list->data;
+        list = _dbus_list_get_next_link(&iface->pending_prop, list);
+        if (!p->get)
+            continue;
+
+        if (p->exists && !p->exists(p, iface->user_data)) {
+            _dbus_list_prepend(invalidated, p);
+            continue;
+        }
+        append_property(iface, p, dict);
+    }
+}
+
+static void process_invalid_properties(DBusList* invalidated,
+    DBusMessageIter* array)
+{
+    DBusList* l;
+    for (l = _dbus_list_get_first_link(&invalidated); l;
+         l = _dbus_list_get_next_link(&invalidated, l)) {
+        GDBusPropertyTable* p = l->data;
+        dbus_message_iter_append_basic(array, DBUS_TYPE_STRING, &p->name);
+    }
+}
+
 static void process_properties_from_interface(struct generic_data* data,
     struct interface_data* iface)
 {
-    DBusList* l;
-    DBusMessage* signal;
     DBusMessageIter iter, dict, array;
-    DBusList* invalidated;
+    DBusList* invalidated = NULL;
+    DBusMessage* signal;
 
-    if (iface->pending_prop == NULL)
+    if (!iface->pending_prop)
         return;
 
-    signal = dbus_message_new_signal(data->path,
-        DBUS_INTERFACE_PROPERTIES, "PropertiesChanged");
-    if (signal == NULL) {
-        error("Unable to allocate new " DBUS_INTERFACE_PROPERTIES
-              ".PropertiesChanged signal");
+    signal = create_properties_changed_signal(data, iface);
+    if (!signal)
         return;
-    }
 
     dbus_list_reverse(&iface->pending_prop);
 
@@ -1696,39 +1905,16 @@ static void process_properties_from_interface(struct generic_data* data,
                 DBUS_DICT_ENTRY_END_CHAR_AS_STRING,
         &dict);
 
-    invalidated = NULL;
-
-    for (l = _dbus_list_get_first_link(&iface->pending_prop); l;
-         l = _dbus_list_get_next_link(&iface->pending_prop, l)) {
-        GDBusPropertyTable* p = l->data;
-
-        if (p->get == NULL)
-            continue;
-
-        if (p->exists != NULL && !p->exists(p, iface->user_data)) {
-            _dbus_list_prepend(&invalidated, p);
-            continue;
-        }
-
-        append_property(iface, p, &dict);
-    }
-
+    process_valid_properties(iface, &dict, &invalidated);
     dbus_message_iter_close_container(&iter, &dict);
 
     dbus_message_iter_open_container(&iter, DBUS_TYPE_ARRAY,
         DBUS_TYPE_STRING_AS_STRING, &array);
-    for (l = _dbus_list_get_first_link(&invalidated); l;
-         l = _dbus_list_get_next_link(&invalidated, l)) {
-        GDBusPropertyTable* p = l->data;
-
-        dbus_message_iter_append_basic(&array, DBUS_TYPE_STRING,
-            &p->name);
-    }
+    process_invalid_properties(invalidated, &array);
     _dbus_list_clear(&invalidated);
     dbus_message_iter_close_container(&iter, &array);
 
     _dbus_list_clear(&iface->pending_prop);
-
     /* Use dbus_connection_send to avoid recursive calls to dbus_flush */
     dbus_connection_send(data->conn, signal, NULL);
     dbus_message_unref(signal);
