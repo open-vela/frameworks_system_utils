@@ -30,6 +30,7 @@ struct GDBusWatch {
     DBusConnection* conn;
     guint serial;
     DBusList* list;
+    gboolean conn_closed;
 };
 
 struct service_data {
@@ -199,6 +200,11 @@ static gboolean remove_match(struct filter_data* data)
     DBusError err;
     char rule[DBUS_MAXIMUM_MATCH_RULE_LENGTH];
 
+    if (data->watcher->conn_closed) {
+        /* If the connection is disconnected, we don't need to remove the match */
+        return TRUE;
+    }
+
     format_rule(data, rule, sizeof(rule));
 
     dbus_error_init(&err);
@@ -222,7 +228,6 @@ static void filter_data_free(struct filter_data* data, DBusList* listener_list)
     if (filter_data_find(data->connection, listener_list) == NULL) {
         dbus_connection_remove_filter(data->connection, message_filter,
             data->watcher);
-        free_dbus_watch(data->watcher);
     }
 
     for (l = _dbus_list_get_first_link(&data->callbacks); l != NULL;
@@ -237,6 +242,11 @@ static void filter_data_free(struct filter_data* data, DBusList* listener_list)
     free(data->interface);
     free(data->member);
     free(data->argument);
+
+    /* no listeners left for the connection */
+    if (_dbus_list_get_last(&listener_list) == NULL) {
+        free_dbus_watch(data->watcher);
+    }
     dbus_connection_unref(data->connection);
     free(data);
 }
@@ -530,7 +540,8 @@ static bool process_signal_message(DBusMessage* message,
     *path = dbus_message_get_path(message);
     *iface = dbus_message_get_interface(message);
     *member = dbus_message_get_member(message);
-    dbus_message_get_args(message, NULL, DBUS_TYPE_STRING, arg, DBUS_TYPE_INVALID);
+    if (!dbus_message_get_args(message, NULL, DBUS_TYPE_STRING, arg, DBUS_TYPE_INVALID))
+        *arg = NULL;
 
     return true;
 }
@@ -616,6 +627,7 @@ static void cleanup_listeners(DBusList* delete_listener, GDBusWatch* watcher)
         DBusList* l = current->data;
         data = l->data;
 
+        /* Has any other callback added callbacks back to this data? */
         if (data->callbacks)
             continue;
 
@@ -686,7 +698,7 @@ static void service_reply(DBusPendingCall* call, void* user_data)
     goto done;
 
 fail:
-    error("%s", err.message);
+    error("service_reply fail: %s", err.message);
     dbus_error_free(&err);
     service_data_free(data);
 done:
@@ -918,6 +930,7 @@ GDBusWatch* new_dbus_watch(DBusConnection* connection)
     watcher->conn = dbus_connection_ref(connection);
     watcher->list = NULL;
     watcher->serial = 0;
+    watcher->conn_closed = FALSE;
 
     return watcher;
 }
@@ -965,4 +978,9 @@ gboolean dbus_client_remove_watch(GDBusClient* client, guint tag)
 void dbus_client_remove_all_watches(GDBusClient* client)
 {
     dbus_remove_all_watches(client->watcher);
+}
+
+void dbus_watch_set_connection_state(GDBusWatch* watcher, gboolean closed)
+{
+    watcher->conn_closed = closed;
 }

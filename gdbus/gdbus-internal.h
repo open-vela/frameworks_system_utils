@@ -99,6 +99,8 @@ struct GDBusProxy {
 
 GDBusWatch* new_dbus_watch(DBusConnection* connection);
 void free_dbus_watch(GDBusWatch* watcher);
+void dbus_watch_set_connection_state(GDBusWatch* watcher, gboolean closed);
+
 int dbus_polkit_check_authorization(DBusConnection* conn,
     const char* action, gboolean allow_interaction,
     void (*callback)(dbus_bool_t, void*),
