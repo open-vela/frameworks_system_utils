@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
+#include <unistd.h>
 
 #include "internal.h"
 #include "kvdb.h"
