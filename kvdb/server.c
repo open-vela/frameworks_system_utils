@@ -534,7 +534,7 @@ static void kvdb_loop(kvdb_server* server)
         int nfds = epoll_wait(server->efd, evs, KVFD_MAX, timeout);
         for (int i = 0; i < nfds; i++) {
             int fd = *(int*)evs[i].data.ptr;
-#ifdef CONFIG_NET_RPMSG
+#if (KVFD_COUNT > 1)
             if (fd != server->fd[0] && fd != server->fd[1]) {
 #else
             if (fd != server->fd[0]) {
