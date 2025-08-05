@@ -41,6 +41,13 @@ config ATRACE
 	---help---
 		Enable Android Trace.
 
+config GDBUS
+	bool "Enable Vela GDBus"
+	depends on LIB_DBUS && LIBUV_EXTENSION
+	default y
+	---help---
+		Enable Vela GDBus
+
 config KVDB
 	tristate "key-value database"
 	default n

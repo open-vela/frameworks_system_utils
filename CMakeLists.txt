@@ -41,13 +41,11 @@ if(CONFIG_SCHED_INSTRUMENTATION_DUMP
                           framework_utils)
   endif()
 
-  if(CONFIG_LIB_DBUS)
+  if(CONFIG_GDBUS)
     file(GLOB GDBUS_CSRCS gdbus/*.c)
     list(APPEND CSRCS ${GDBUS_CSRCS})
     list(APPEND CFLAGS -DDBUS_COMPILATION -DVERSION="1.15.1")
-    list(APPEND INCDIR ${NUTTX_APPS_DIR}/external/dbus/dbus
-         ${NUTTX_APPS_DIR}/external/glib/glib/glib
-         ${NUTTX_APPS_DIR}/external/glib/glib)
+    list(APPEND INCDIR ${NUTTX_APPS_DIR}/external/dbus/dbus)
   endif()
 
   if(CONFIG_KVDB)

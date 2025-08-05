@@ -27,12 +27,10 @@ MAINSRC  += trace/atrace.c
 PROGNAME += atrace
 endif
 
-ifneq ($(CONFIG_LIB_DBUS),)
+ifneq ($(CONFIG_GDBUS),)
 CSRCS  += $(wildcard gdbus/*.c)
 CFLAGS += -DDBUS_COMPILATION -DVERSION="1.15.1"
 CFLAGS += ${INCDIR_PREFIX}$(APPDIR)/external/dbus/dbus
-CFLAGS += ${INCDIR_PREFIX}$(APPDIR)/external/glib/glib/glib
-CFLAGS += ${INCDIR_PREFIX}$(APPDIR)/external/glib/glib/
 endif # CONFIG_LIB_DBUS
 
 ifneq ($(CONFIG_KVDB),)
