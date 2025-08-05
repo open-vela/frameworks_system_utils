@@ -219,7 +219,7 @@ static void append_annotation(DBusString* str, int flags,
     int flag_type, const char* append_annotate)
 {
     if (flags & flag_type) {
-        _dbus_string_append_printf(str, append_annotate);
+        _dbus_string_append(str, append_annotate);
     }
 }
 
@@ -941,8 +941,8 @@ static DBusMessage* properties_get_all(DBusConnection* connection,
 static char* validate_arguments(DBusMessage* message, DBusMessageIter* iter,
     struct generic_data* data, struct interface_data** iface_out, const char** name)
 {
-    const char *interface = NULL;
-    char *error_msg = NULL;
+    const char* interface = NULL;
+    char* error_msg = NULL;
 
     do {
         if (!dbus_message_iter_init(message, iter)) {
@@ -975,7 +975,7 @@ static char* validate_arguments(DBusMessage* message, DBusMessageIter* iter,
         }
 
         *iface_out = find_interface(data->interfaces, interface);
-        if (*iface_out == NULL){
+        if (*iface_out == NULL) {
             asprintf(&error_msg, "No such interface '%s'", interface);
             break;
         }
@@ -992,12 +992,12 @@ static DBusMessage* properties_set(DBusConnection* connection,
     DBusMessageIter iter, sub;
     struct interface_data* iface = NULL;
     const GDBusPropertyTable* property;
-    const char *name = NULL;
+    const char* name = NULL;
     struct property_data* propdata;
     gboolean valid_signature;
     char* signature;
 
-     char *err_str = validate_arguments(message, &iter, data, &iface, &name);
+    char* err_str = validate_arguments(message, &iter, data, &iface, &name);
     if (err_str) {
         DBusMessage* reply = dbus_create_error(message, DBUS_ERROR_INVALID_ARGS,
             "%s", err_str);
@@ -1355,10 +1355,9 @@ static gboolean add_interface(struct generic_data* data,
     if (check_methods_experimental(methods)
         && check_signals_experimental(signals)
         && check_properties_experimental(properties)) {
-            info("Interface %s is experimental, Nothing to register", name);
-            return FALSE; 
-        }
-        
+        info("Interface %s is experimental, Nothing to register", name);
+        return FALSE;
+    }
 
     iface = create_interface_data(name, methods, signals, properties, user_data, destroy);
     if (iface == NULL)

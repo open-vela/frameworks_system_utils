@@ -127,6 +127,7 @@ static void client_async_handler_reply(struct pending_call_async* handler)
         handler->timeout, handler->pending_reply, handler->user_data, handler->destroy);
     dbus_message_unref(handler->msg);
     dbus_connection_unref(handler->conn);
+    free(handler);
 }
 
 static void client_async_handler_get_prop(struct get_prop_handler* handler)
