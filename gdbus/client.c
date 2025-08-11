@@ -1582,7 +1582,6 @@ static gboolean get_properties_specific(GDBusProxy* proxy)
     GDBusClient* client;
 
     client = proxy->client;
-    proxy_added(client, proxy);
 
     if (client->proxy_property_filter && !client->proxy_property_filter(proxy, client->user_data)) {
         msg = dbus_message_new_method_call(client->service_name,
