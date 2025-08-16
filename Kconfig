@@ -132,8 +132,7 @@ config KVDB_UNQLITE
 
 config KVDB_NVS
 	bool "NVS"
-	select MTD_CONFIG_NAMED
-	depends on !MTD_CONFIG_NONE
+	depends on MTD_CONFIG_NAMED
 	---help---
 		Configure using Non-Volatile Storage to store Key-value
 
