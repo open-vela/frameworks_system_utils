@@ -1584,6 +1584,10 @@ static gboolean get_properties_specific(GDBusProxy* proxy)
     client = proxy->client;
 
     if (client->proxy_property_filter && !client->proxy_property_filter(proxy, client->user_data)) {
+        if (proxy->getting_all_prop) {
+            return FALSE;
+        }
+
         msg = dbus_message_new_method_call(client->service_name,
             proxy->obj_path, proxy->interface, "GetProperties");
         if (msg == NULL)
@@ -1596,6 +1600,7 @@ static gboolean get_properties_specific(GDBusProxy* proxy)
             return FALSE;
         }
 
+        proxy->getting_all_prop = TRUE;
         dbus_message_unref(msg);
     }
 
