@@ -162,7 +162,7 @@ static void handle_authorization_reply(DBusPendingCall* call, void* user_data)
     authorized = parse_authorization_result(&iter);
 
 cleanup:
-    if (context->callback) {
+    if (context != NULL && context->callback) {
         context->callback(authorized, context->user_data);
     }
 
