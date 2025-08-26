@@ -291,7 +291,14 @@ static struct filter_data* filter_data_get(GDBusWatch* watcher,
     data->watcher = watcher;
 
     if (!add_match(data, filter)) {
-        filter_data_free(data, watcher->list);
+        dbus_connection_unref(data->connection);
+        free(data->name);
+        free(data->owner);
+        free(data->path);
+        free(data->interface);
+        free(data->member);
+        free(data->argument);
+        free(data);
         return NULL;
     }
 
