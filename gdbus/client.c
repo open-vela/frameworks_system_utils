@@ -563,7 +563,8 @@ static void get_all_properties_reply(DBusPendingCall* call, void* user_data)
         goto done;
     }
 
-    dbus_message_iter_init(reply, &iter);
+    if (!dbus_message_iter_init(reply, &iter))
+        goto done;
 
     update_properties(proxy, &iter, FALSE, TRUE);
 
@@ -1016,7 +1017,8 @@ static void refresh_property_reply(DBusPendingCall* call, void* user_data)
     if (dbus_set_error_from_message(&error, reply) == FALSE) {
         DBusMessageIter iter;
 
-        dbus_message_iter_init(reply, &iter);
+        if (!dbus_message_iter_init(reply, &iter))
+            return;
 
         add_property(data->proxy, data->name, &iter, TRUE, TRUE);
     } else

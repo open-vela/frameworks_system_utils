@@ -158,7 +158,9 @@ static void handle_authorization_reply(DBusPendingCall* call, void* user_data)
         goto cleanup;
     }
 
-    dbus_message_iter_init(reply, &iter);
+    if (!dbus_message_iter_init(reply, &iter))
+        goto cleanup;
+
     authorized = parse_authorization_result(&iter);
 
 cleanup:
