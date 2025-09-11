@@ -25,7 +25,11 @@
 
 #include "gdbus.h"
 
-#define METHOD_CALL_TIMEOUT (-1)
+/** method call timeout in milliseconds:
+ * -1 (or #DBUS_TIMEOUT_USE_DEFAULT) for default timer(25s)
+ * ((int) 0x7fffffff)(or #DBUS_TIMEOUT_INFINITE) for no timeout
+ */
+#define METHOD_CALL_TIMEOUT DBUS_TIMEOUT_INFINITE
 
 #ifndef DBUS_INTERFACE_OBJECT_MANAGER
 #define DBUS_INTERFACE_OBJECT_MANAGER DBUS_INTERFACE_DBUS ".ObjectManager"
