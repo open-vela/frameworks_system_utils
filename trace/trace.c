@@ -55,58 +55,58 @@ void atrace_set_tracing_enabled(bool enabled)
 
 void atrace_begin_body(const char* name)
 {
-    sched_note_printf(NOTE_TAG_ALWAYS, "B|%d|%s", gettid(), name);
+    sched_note_printf(NOTE_TAG_ALWAYS, LOG_INFO, "B|%d|%s", gettid(), name);
 }
 
 void atrace_end_body(void)
 {
-    sched_note_printf(NOTE_TAG_ALWAYS, "E|%d", gettid());
+    sched_note_printf(NOTE_TAG_ALWAYS, LOG_INFO, "E|%d", gettid());
 }
 
 void atrace_async_begin_body(const char* name, int32_t cookie)
 {
-    sched_note_printf(NOTE_TAG_ALWAYS, "S|%d|%s|%" PRId32, gettid(),
+    sched_note_printf(NOTE_TAG_ALWAYS, LOG_INFO, "S|%d|%s|%" PRId32, gettid(),
         name, cookie);
 }
 
 void atrace_async_end_body(const char* name, int32_t cookie)
 {
-    sched_note_printf(NOTE_TAG_ALWAYS, "F|%d|%s|%" PRId32, gettid(),
+    sched_note_printf(NOTE_TAG_ALWAYS, LOG_INFO, "F|%d|%s|%" PRId32, gettid(),
         name, cookie);
 }
 
 void atrace_async_for_track_begin_body(const char* track_name,
     const char* name, int32_t cookie)
 {
-    sched_note_printf(NOTE_TAG_ALWAYS, "G|%d|%s|%s|%" PRId32, gettid(),
+    sched_note_printf(NOTE_TAG_ALWAYS, LOG_INFO, "G|%d|%s|%s|%" PRId32, gettid(),
         track_name, name, cookie);
 }
 
 void atrace_async_for_track_end_body(const char* track_name, const char* name, int32_t cookie)
 {
-    sched_note_printf(NOTE_TAG_ALWAYS, "H|%d|%s|%s|%" PRId32, gettid(),
+    sched_note_printf(NOTE_TAG_ALWAYS, LOG_INFO, "H|%d|%s|%s|%" PRId32, gettid(),
         track_name, name, cookie);
 }
 
 void atrace_instant_body(const char* name)
 {
-    sched_note_printf(NOTE_TAG_ALWAYS, "I|%d|%s", gettid(), name);
+    sched_note_printf(NOTE_TAG_ALWAYS, LOG_INFO, "I|%d|%s", gettid(), name);
 }
 
 void atrace_instant_for_track_body(const char* track_name, const char* name)
 {
-    sched_note_printf(NOTE_TAG_ALWAYS, "N|%d|%s|%s", gettid(),
+    sched_note_printf(NOTE_TAG_ALWAYS, LOG_INFO, "N|%d|%s|%s", gettid(),
         track_name, name);
 }
 
 void atrace_int_body(const char* name, int32_t value)
 {
-    sched_note_printf(NOTE_TAG_ALWAYS, "C|%d|%s|%" PRId32,
+    sched_note_printf(NOTE_TAG_ALWAYS, LOG_INFO, "C|%d|%s|%" PRId32,
         gettid(), name, value);
 }
 
 void atrace_int64_body(const char* name, int64_t value)
 {
-    sched_note_printf(NOTE_TAG_ALWAYS, "C|%d|%s|%" PRId64, gettid(),
+    sched_note_printf(NOTE_TAG_ALWAYS, LOG_INFO, "C|%d|%s|%" PRId64, gettid(),
         name, value);
 }
