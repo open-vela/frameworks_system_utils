@@ -39,6 +39,8 @@
 #define DBUS_ERROR_PROPERTY_READ_ONLY "org.freedesktop.DBus.Error.PropertyReadOnly"
 #endif
 
+#define DBUS_ERROR_OOM "No memory"
+
 #define G_DBUS_ANNOTATE(name_, value_)                     \
     "<annotation name=\"org.freedesktop.DBus." name_ "\" " \
     "value=\"" value_ "\"/>"
@@ -946,13 +948,16 @@ static char* validate_arguments(DBusMessage* message, DBusMessageIter* iter,
 
     do {
         if (!dbus_message_iter_init(message, iter)) {
-            asprintf(&error_msg, "No arguments given");
+            if (asprintf(&error_msg, "No arguments given") < 0)
+                error_msg = DBUS_ERROR_OOM;
             break;
         }
 
         if (dbus_message_iter_get_arg_type(iter) != DBUS_TYPE_STRING) {
-            asprintf(&error_msg, "Invalid argument type: '%c'",
-                dbus_message_iter_get_arg_type(iter));
+            if (asprintf(&error_msg, "Invalid argument type: '%c'",
+                    dbus_message_iter_get_arg_type(iter))
+                < 0)
+                error_msg = DBUS_ERROR_OOM;
             break;
         }
 
@@ -960,8 +965,10 @@ static char* validate_arguments(DBusMessage* message, DBusMessageIter* iter,
         dbus_message_iter_next(iter);
 
         if (dbus_message_iter_get_arg_type(iter) != DBUS_TYPE_STRING) {
-            asprintf(&error_msg, "Invalid argument type: '%c'",
-                dbus_message_iter_get_arg_type(iter));
+            if (asprintf(&error_msg, "Invalid argument type: '%c'",
+                    dbus_message_iter_get_arg_type(iter))
+                < 0)
+                error_msg = DBUS_ERROR_OOM;
             break;
         }
 
@@ -969,14 +976,17 @@ static char* validate_arguments(DBusMessage* message, DBusMessageIter* iter,
         dbus_message_iter_next(iter);
 
         if (dbus_message_iter_get_arg_type(iter) != DBUS_TYPE_VARIANT) {
-            asprintf(&error_msg, "Invalid argument type: '%c'",
-                dbus_message_iter_get_arg_type(iter));
+            if (asprintf(&error_msg, "Invalid argument type: '%c'",
+                    dbus_message_iter_get_arg_type(iter))
+                < 0)
+                error_msg = DBUS_ERROR_OOM;
             break;
         }
 
         *iface_out = find_interface(data->interfaces, interface);
         if (*iface_out == NULL) {
-            asprintf(&error_msg, "No such interface '%s'", interface);
+            if (asprintf(&error_msg, "No such interface '%s'", interface) < 0)
+                error_msg = DBUS_ERROR_OOM;
             break;
         }
 
