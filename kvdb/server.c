@@ -20,8 +20,8 @@
 #include <unistd.h>
 
 #include <netpacket/rpmsg.h>
-#include <sys/ioctl.h>
 #include <sys/epoll.h>
+#include <sys/ioctl.h>
 #include <sys/queue.h>
 #include <sys/socket.h>
 #include <sys/time.h>
