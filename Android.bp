@@ -4,6 +4,10 @@ cc_defaults {
   static_libs: [
     "libframework_utils",
   ],
+
+  header_libs: [
+    "kernel_modules_headers",
+  ],
 }
 
 cc_library_static {
@@ -20,12 +24,16 @@ cc_library_static {
         "-DCONFIG_KVDB_SERVER_CPUNAME=\"ap\"",
         "-fvisibility=hidden",
     ],
+
+    header_libs: [
+        "kernel_modules_headers",
+    ],
 }
 
 cc_library_headers {
     name: "libframework_utils_headers",
     export_include_dirs: ["include"],
-    proprietary: true
+    vendor_available: true,
 }
 
 cc_binary {
@@ -54,5 +62,10 @@ cc_library_static {
         "-DCONFIG_KVDB_SERVER_CPUNAME=\"ap\"",
         "-fvisibility=hidden",
     ],
+
+    header_libs: [
+        "kernel_modules_headers",
+    ],
+
     proprietary: true
 }
