@@ -107,7 +107,8 @@ static gboolean dbus_send_msg_reply_pendingcall(DBusConnection* conn, DBusMessag
     }
 
     if (dbus_send_message_with_reply(conn, msg, pending_call_pp, timeout) == FALSE) {
-        destroy(user_data);
+        if (destroy != NULL)
+            destroy(user_data);
         return FALSE;
     }
 
