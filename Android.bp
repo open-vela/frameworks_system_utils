@@ -31,6 +31,12 @@ cc_library_static {
 }
 
 cc_library_headers {
+    name: "libprop_headers",
+    export_include_dirs: ["include/cutils"],
+    vendor_available: true,
+}
+
+cc_library_headers {
     name: "libframework_utils_headers",
     export_include_dirs: ["include"],
     vendor_available: true,
