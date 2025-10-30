@@ -107,8 +107,6 @@ static gboolean dbus_send_msg_reply_pendingcall(DBusConnection* conn, DBusMessag
     }
 
     if (dbus_send_message_with_reply(conn, msg, pending_call_pp, timeout) == FALSE) {
-        if (destroy != NULL)
-            destroy(user_data);
         return FALSE;
     }
 
@@ -124,8 +122,13 @@ static gboolean dbus_send_msg_reply_pendingcall(DBusConnection* conn, DBusMessag
 
 static void client_async_handler_reply(struct pending_call_async* handler)
 {
-    dbus_send_msg_reply_pendingcall(handler->conn, handler->msg, handler->call,
+    gboolean ret = dbus_send_msg_reply_pendingcall(handler->conn, handler->msg, handler->call,
         handler->timeout, handler->pending_reply, handler->user_data, handler->destroy);
+    if (ret == FALSE) {
+        if (handler->destroy != NULL)
+            handler->destroy(handler->user_data);
+    }
+
     dbus_message_unref(handler->msg);
     dbus_connection_unref(handler->conn);
     free(handler);
