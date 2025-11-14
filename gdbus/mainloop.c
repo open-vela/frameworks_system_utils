@@ -34,9 +34,10 @@ struct timeout_handler {
     DBusTimeout* timeout;
 };
 
-struct watch_info {
-    uv_poll_t handle;
-    DBusWatch* watch;
+struct dbus_watch_info {
+    uv_poll_t* handle;
+    DBusWatch* read_watch;
+    DBusWatch* write_watch;
     DBusConnection* conn;
 };
 
@@ -87,7 +88,7 @@ static inline void queue_dispatch(DBusConnection* conn,
 
 static void watch_func(uv_poll_t* handle, int state, int events)
 {
-    struct watch_info* info = handle->data;
+    struct dbus_watch_info* info = handle->data;
     unsigned int flags = 0;
     DBusDispatchStatus status;
     DBusConnection* conn;
@@ -104,7 +105,10 @@ static void watch_func(uv_poll_t* handle, int state, int events)
     /* Protect connection from being destroyed by dbus_watch_handle */
     conn = dbus_connection_ref(info->conn);
 
-    dbus_watch_handle(info->watch, flags);
+    if (flags & DBUS_WATCH_READABLE && info->read_watch != NULL)
+        dbus_watch_handle(info->read_watch, flags);
+    if (flags & DBUS_WATCH_WRITABLE && info->write_watch != NULL)
+        dbus_watch_handle(info->write_watch, flags);
 
     status = dbus_connection_get_dispatch_status(conn);
     queue_dispatch(conn, status);
@@ -112,66 +116,143 @@ static void watch_func(uv_poll_t* handle, int state, int events)
     dbus_connection_unref(conn);
 }
 
-static void watch_info_free(void* data)
+static void close_watch_info_handler_cb(uv_handle_t* handle)
 {
-    struct watch_info* info = data;
+    struct dbus_watch_info* info = handle->data;
 
-    dbus_connection_unref(info->conn);
-    uv_close((uv_handle_t*)&info->handle, close_cb);
+    if (info == NULL)
+        return;
+
+    if (info->read_watch) {
+        dbus_watch_set_data(info->read_watch, NULL, NULL);
+        info->read_watch = NULL;
+    }
+    if (info->write_watch) {
+        dbus_watch_set_data(info->write_watch, NULL, NULL);
+        info->write_watch = NULL;
+    }
+
+    free(info->handle);
+    info->handle = NULL;
+}
+
+static void watch_info_free_read(void* data)
+{
+    struct dbus_watch_info* info = data;
+
+    if (info != NULL && info->read_watch != NULL) {
+        info->read_watch = NULL;
+
+        /**
+         * libdbus maybe call read watch free cb, not from remove watch.
+         * need close uv hander when read and watch both null.
+         */
+        if (info->write_watch == NULL && info->handle != NULL)
+            uv_close((uv_handle_t*)info->handle, close_watch_info_handler_cb);
+    }
+}
+
+static void watch_info_free_write(void* data)
+{
+    struct dbus_watch_info* info = data;
+
+    if (info != NULL && info->write_watch != NULL) {
+        info->write_watch = NULL;
+
+        /**
+         * libdbus maybe call write watch free cb, not from remove watch.
+         * need close uv hander when read and watch both null.
+         */
+        if (info->read_watch == NULL && info->handle != NULL)
+            uv_close((uv_handle_t*)info->handle, close_watch_info_handler_cb);
+    }
 }
 
 static dbus_bool_t add_watch(DBusWatch* watch, void* data)
 {
-    DBusConnection* conn = data;
+    struct dbus_watch_info* watch_info = data;
     int cond = UV_DISCONNECT;
-    struct watch_info* info;
-    unsigned int flags;
-    int fd;
+    int flags = 0;
 
     if (!dbus_watch_get_enabled(watch))
         return TRUE;
 
-    info = calloc(1, sizeof(struct watch_info));
-    if (info == NULL)
-        return FALSE;
-
-    fd = dbus_watch_get_unix_fd(watch);
-
-    info->watch = watch;
-    info->conn = dbus_connection_ref(conn);
-
-    dbus_watch_set_data(watch, info, watch_info_free);
-
     flags = dbus_watch_get_flags(watch);
+    if (flags & DBUS_WATCH_READABLE) {
+        dbus_watch_set_data(watch, watch_info, watch_info_free_read);
+        watch_info->read_watch = watch;
+    }
+    if (flags & DBUS_WATCH_WRITABLE) {
+        dbus_watch_set_data(watch, watch_info, watch_info_free_write);
+        watch_info->write_watch = watch;
+    }
+
+    if (watch_info->read_watch != NULL && watch != watch_info->read_watch)
+        flags |= dbus_watch_get_flags(watch_info->read_watch);
+    if (watch_info->write_watch != NULL && watch != watch_info->write_watch)
+        flags |= dbus_watch_get_flags(watch_info->write_watch);
 
     if (flags & DBUS_WATCH_READABLE)
         cond |= UV_READABLE;
     if (flags & DBUS_WATCH_WRITABLE)
         cond |= UV_WRITABLE;
 
-    if (uv_poll_init(uv_default_loop(), &info->handle, fd) != 0) {
-        free(info);
-        goto errout;
+    if (!watch_info->handle) {
+        watch_info->handle = calloc(1, sizeof(uv_poll_t));
+        if (!watch_info->handle)
+            return FALSE;
+
+        int fd = dbus_watch_get_unix_fd(watch);
+        if (uv_poll_init(uv_default_loop(), watch_info->handle, fd) != 0) {
+            free(watch_info->handle);
+            watch_info->handle = NULL;
+            dbus_watch_set_data(watch, NULL, NULL);
+            return FALSE;
+        }
+
+        watch_info->handle->data = watch_info;
     }
 
-    info->handle.data = info;
-    if (uv_poll_start(&info->handle, cond, watch_func) != 0) {
-        uv_close((uv_handle_t*)&info->handle, close_cb);
-        goto errout;
+    if (uv_poll_start(watch_info->handle, cond, watch_func) != 0) {
+        uv_close((uv_handle_t*)watch_info->handle, close_watch_info_handler_cb);
+        return FALSE;
     }
 
     return TRUE;
-errout:
-    dbus_connection_unref(conn);
-    return FALSE;
 }
 
 static void remove_watch(DBusWatch* watch, void* data)
 {
+    int flags = 0;
+    int cond = 0;
+    struct dbus_watch_info* info = data;
+
+    /* If the watch is still enabled, we treat this as a toggle */
     if (dbus_watch_get_enabled(watch))
         return;
 
-    /* will trigger watch_info_free() */
+    if (info->read_watch == watch && info->write_watch != NULL) {
+        /* remove watch is read, keep write flag if write watch is valid */
+        flags = dbus_watch_get_flags(info->write_watch);
+    } else if (info->write_watch == watch && info->read_watch != NULL) {
+        /* remove watch is write, keep read flag if read watch is valid */
+        flags = dbus_watch_get_flags(info->read_watch);
+    }
+
+    if (flags & DBUS_WATCH_READABLE)
+        cond |= UV_READABLE;
+    if (flags & DBUS_WATCH_WRITABLE)
+        cond |= UV_WRITABLE;
+
+    if (cond != 0) {
+        cond |= UV_DISCONNECT;
+        if (uv_poll_start(info->handle, cond, watch_func) != 0) {
+            uv_close((uv_handle_t*)info->handle, close_watch_info_handler_cb);
+            return;
+        }
+    }
+
+    /* will trigger watch_info_free_read/write() */
     dbus_watch_set_data(watch, NULL, NULL);
 }
 
@@ -257,10 +338,25 @@ static void dispatch_status(DBusConnection* conn,
     queue_dispatch(conn, status);
 }
 
+static void dbus_watch_info_free(void* data)
+{
+    struct dbus_watch_info* info = data;
+
+    if (info != NULL) {
+        dbus_connection_unref(info->conn);
+        free(info);
+    }
+}
+
 static inline void setup_dbus_with_main_loop(DBusConnection* conn)
 {
+    struct dbus_watch_info* info = calloc(1, sizeof(struct dbus_watch_info));
+    if (info == NULL)
+        return;
+    info->conn = dbus_connection_ref(conn);
+
     dbus_connection_set_watch_functions(conn, add_watch, remove_watch,
-        watch_toggled, conn, NULL);
+        watch_toggled, info, dbus_watch_info_free);
 
     dbus_connection_set_timeout_functions(conn, add_timeout, remove_timeout,
         timeout_toggled, NULL, NULL);
