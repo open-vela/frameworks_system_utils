@@ -377,6 +377,11 @@ static bool kvdb_client(kvdb_server* server, int fd)
 
     switch (msg[0]) {
     case 'D': {
+        if (len < 2)
+            len = kvdb_recv(fd, msg, len, 2);
+        if (len < 0)
+            goto out;
+
         size_t key_len = (unsigned char)msg[1];
         size_t end_pos = key_len + 2;
         if (end_pos >= PROP_MSG_MAX)
@@ -395,6 +400,11 @@ static bool kvdb_client(kvdb_server* server, int fd)
         break;
     }
     case 'G': {
+        if (len < 3)
+            len = kvdb_recv(fd, msg, len, 3);
+        if (len < 0)
+            goto out;
+
         size_t key_len = (unsigned char)msg[1];
         size_t val_len = (unsigned char)msg[2];
         size_t end_pos = key_len + 3;
@@ -412,6 +422,11 @@ static bool kvdb_client(kvdb_server* server, int fd)
         break;
     }
     case 'S': {
+        if (len < 3)
+            len = kvdb_recv(fd, msg, len, 3);
+        if (len < 0)
+            goto out;
+
         size_t key_len = (unsigned char)msg[1];
         size_t val_len = (unsigned char)msg[2];
         size_t end_pos = key_len + val_len + 3;
@@ -444,6 +459,11 @@ static bool kvdb_client(kvdb_server* server, int fd)
         break;
     }
     case 'R': {
+        if (len < 2)
+            len = kvdb_recv(fd, msg, len, 2);
+        if (len < 0)
+            goto out;
+
         size_t path_len = (unsigned char)msg[1];
         size_t end_pos = path_len + 2;
         if (end_pos >= PROP_MSG_MAX)
@@ -460,6 +480,11 @@ static bool kvdb_client(kvdb_server* server, int fd)
         break;
     }
     case 'M': {
+        if (len < 2)
+            len = kvdb_recv(fd, msg, len, 2);
+        if (len < 0)
+            goto out;
+
         /* Property monitor open operation */
         size_t key_len = (unsigned char)msg[1];
         size_t end_pos = key_len + 2;
