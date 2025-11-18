@@ -67,13 +67,14 @@ static ssize_t recv_safe(int sockfd, char* buf, size_t offset, size_t len)
 }
 
 /****************************************************************************
- * Name: property_connect
+ * Name: property_connect_one
  *
  * Description:
  *   Initialize client socket and connect to server
  *
  * Input Parameters:
- *   None
+ *   addr - server address
+ *   addrlen - server address length
  *
  * Returned Value:
  *   On success return client socket fd.
@@ -81,13 +82,10 @@ static ssize_t recv_safe(int sockfd, char* buf, size_t offset, size_t len)
  *
  ****************************************************************************/
 
-static int property_connect(void)
+static int property_connect_one(const struct sockaddr* addr,
+    socklen_t addrlen)
 {
-#ifdef CONFIG_KVDB_SERVER
-    int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
-#else
-    int fd = socket(AF_RPMSG, SOCK_STREAM | SOCK_CLOEXEC, 0);
-#endif
+    int fd = socket(addr->sa_family, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if (fd < 0)
         return -errno;
 
@@ -100,31 +98,76 @@ static int property_connect(void)
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 #endif
 
-#ifdef CONFIG_KVDB_SERVER
-    struct sockaddr_un addr = {
+    int ret = connect(fd, addr, addrlen);
+    if (ret < 0 && errno != ENOENT) {
+        ret = -errno;
+        close(fd);
+    } else if (ret == 0) {
+        return fd;
+    }
+
+    return ret;
+}
+
+/****************************************************************************
+ * Name: property_connect
+ *
+ * Description:
+ *   Initialize client socket and connect to server
+ *
+ * Returned Value:
+ *   On success return client socket fd.
+ *   On error return error value (<0).
+ *
+ ****************************************************************************/
+
+static int property_connect(void)
+{
+    int ret;
+#ifdef CONFIG_NET_LOCAL
+    const struct sockaddr_un laddr = {
         .sun_family = AF_UNIX,
         .sun_path = PROP_SERVER_PATH,
     };
-#else
-    struct sockaddr_rpmsg addr = {
+#endif
+
+#ifdef CONFIG_NET_RPMSG
+    const struct sockaddr_rpmsg raddr = {
         .rp_family = AF_RPMSG,
         .rp_name = PROP_SERVER_PATH,
         .rp_cpu = CONFIG_KVDB_SERVER_CPUNAME,
     };
 #endif
 
+    const struct sockaddr* addr[] = {
+#ifdef CONFIG_NET_LOCAL
+        (const struct sockaddr*)&laddr,
+#endif
+#ifdef CONFIG_NET_RPMSG
+        (const struct sockaddr*)&raddr,
+#endif
+    };
+
+    socklen_t socklen[] = {
+#ifdef CONFIG_NET_LOCAL
+        sizeof(laddr),
+#endif
+#ifdef CONFIG_NET_RPMSG
+        sizeof(raddr),
+#endif
+    };
+
     while (1) {
-        int ret = connect(fd, (const struct sockaddr*)&addr, sizeof(addr));
-        if (ret < 0 && errno != ENOENT) {
-            ret = -errno;
-            close(fd);
-            return ret;
-        } else if (ret == 0) {
-            return fd;
+        for (size_t i = 0; i < sizeof(addr) / sizeof(addr[0]); i++) {
+            ret = property_connect_one(addr[i], socklen[i]);
+            if (ret >= 0)
+                return ret;
         }
 
         usleep(1000);
     }
+
+    return ret;
 }
 
 /****************************************************************************

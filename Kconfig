@@ -102,7 +102,7 @@ if !KVDB_DIRECT
 
 config KVDB_SERVER_CPUNAME
 	string "which cpu kvdb server runs on"
-	depends on !KVDB_SERVER
+	depends on NET_RPMSG
 	default "ap"
 
 config KVDB_TIMEOUT_INTERVAL
