@@ -10,19 +10,63 @@ cc_defaults {
   ],
 }
 
+soong_config_module_type {
+    name: "framework_utils_cc_defaults",
+    module_type: "cc_defaults",
+    config_namespace: "vela",
+
+    variables: [
+        "kvdb_server",
+    ],
+    properties: [
+        "cflags",
+    ],
+}
+
+soong_config_string_variable {
+    name: "kvdb_server",
+    values: [
+        "cp",
+        "sensor",
+        "audio",
+    ],
+}
+
+framework_utils_cc_defaults {
+    name: "frameworks_utils_cflags_defaults",
+
+    cflags: [
+        "-fvisibility=hidden",
+    ],
+
+    soong_config_variables: {
+        kvdb_server: {
+            cp: {
+                cflags: ["-DCONFIG_KVDB_SERVER_CPUNAME=\"cp\""],
+            },
+            sensor: {
+                cflags: ["-DCONFIG_KVDB_SERVER_CPUNAME=\"sensor\""],
+            },
+            audio: {
+                cflags: ["-DCONFIG_KVDB_SERVER_CPUNAME=\"audio\""],
+            },
+            conditions_default: {
+                cflags: ["-DCONFIG_KVDB_SERVER_CPUNAME=\"ap\""],
+            },
+        },
+    },
+}
+
 cc_library_static {
     name: "libframework_utils",
     export_include_dirs: ["include"],
+
+    defaults: ["frameworks_utils_cflags_defaults"],
 
     srcs: [
         "kvdb/common.c",
         "kvdb/system_properties.c",
         "kvdb/client.c",
-    ],
-
-    cflags: [
-        "-DCONFIG_KVDB_SERVER_CPUNAME=\"ap\"",
-        "-fvisibility=hidden",
     ],
 
     header_libs: [
@@ -58,15 +102,12 @@ cc_library_static {
     name: "libkvdb_vendor",
     export_include_dirs: ["include"],
 
+    defaults: ["frameworks_utils_cflags_defaults"],
+
     srcs: [
         "kvdb/common.c",
         "kvdb/system_properties.c",
         "kvdb/client.c",
-    ],
-
-    cflags: [
-        "-DCONFIG_KVDB_SERVER_CPUNAME=\"ap\"",
-        "-fvisibility=hidden",
     ],
 
     header_libs: [
