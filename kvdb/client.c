@@ -89,10 +89,10 @@ static int property_connect_one(const struct sockaddr* addr,
     if (fd < 0)
         return -errno;
 
-#if CONFIG_KVDB_TIMEOUT_INTERVAL
+#if defined(CONFIG_KVDB_TIMEOUT_INTERVAL) && CONFIG_KVDB_TIMEOUT_INTERVAL > 0
     struct timeval timeout = {
-        .tv_sec = CONFIG_KVDB_TIMEOUT_INTERVAL,
-        .tv_usec = 0,
+        .tv_sec = 0,
+        .tv_usec = CONFIG_KVDB_TIMEOUT_INTERVAL,
     };
     setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));

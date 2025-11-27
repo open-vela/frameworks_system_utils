@@ -106,8 +106,9 @@ config KVDB_SERVER_CPUNAME
 	default "ap"
 
 config KVDB_TIMEOUT_INTERVAL
-	int "transaction timeout interval(sec)"
-	default 0
+	int "transaction timeout interval(usec)"
+	default 500000
+	depends on NET_SOCKOPTS
 
 endif
 
