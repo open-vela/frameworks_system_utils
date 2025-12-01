@@ -296,7 +296,7 @@ static int kvdb_bind(int fd[])
         if (ret < 0)
             return ret;
 
-        ret = listen(fd[i], SOMAXCONN);
+        ret = listen(fd[i], CONFIG_KVDB_BACKLOG_CONNS);
         if (ret < 0)
             return ret;
     }
