@@ -849,6 +849,14 @@ static void proxy_get_properties_reply(DBusPendingCall* call, void* user_data)
     DBusMessageIter array;
     DBusError error;
 
+    if (!proxy->getting_all_prop) {
+        /**
+         * not in getting prop process, do nothing for reply.
+         * maybe proxy already freed.
+         */
+        return;
+    }
+
     dbus_error_init(&error);
     if (dbus_set_error_from_message(&error, message)) {
         goto out;
@@ -865,6 +873,9 @@ out:
 
     dbus_error_free(&error);
     dbus_message_unref(message);
+    proxy->getting_all_prop = FALSE;
+    dbus_pending_call_unref(proxy->get_all_call);
+    proxy->get_all_call = NULL;
 }
 
 static gboolean proxy_get_properties(GDBusProxy* proxy)
@@ -872,7 +883,11 @@ static gboolean proxy_get_properties(GDBusProxy* proxy)
     DBusMessage* msg;
     GDBusClient* client;
 
+    if (proxy->getting_all_prop)
+        return FALSE;
+
     client = proxy->client;
+
     if (client->proxy_property_filter
         && !client->proxy_property_filter(proxy, client->user_data)) {
         msg = dbus_message_new_method_call(client->service_name,
@@ -880,13 +895,14 @@ static gboolean proxy_get_properties(GDBusProxy* proxy)
         if (msg == NULL)
             return FALSE;
 
-        if (dbus_send_msg_reply_async(client, msg, NULL, -1,
+        if (dbus_send_msg_reply_async(client, msg, &proxy->get_all_call, -1,
                 proxy_get_properties_reply, proxy, NULL)
             == FALSE) {
             dbus_message_unref(msg);
             return FALSE;
         }
         dbus_message_unref(msg);
+        proxy->getting_all_prop = TRUE;
     }
 
     return TRUE;
