@@ -23,7 +23,7 @@
 #include <uv.h>
 
 #ifdef __NuttX__
-#include <nuttx/tls.h>
+#include <nuttx/tls_task.h>
 #include <pthread.h>
 #endif
 
