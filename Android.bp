@@ -37,6 +37,7 @@ framework_utils_cc_defaults {
 
     cflags: [
         "-fvisibility=hidden",
+        "-DCONFIG_NET_RPMSG",
     ],
 
     soong_config_variables: {
