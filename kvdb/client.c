@@ -99,14 +99,13 @@ static int property_connect_one(const struct sockaddr* addr,
 #endif
 
     int ret = connect(fd, addr, addrlen);
-    if (ret < 0 && errno != ENOENT) {
+    if (ret < 0) {
         ret = -errno;
         close(fd);
-    } else if (ret == 0) {
-        return fd;
+        return ret;
     }
 
-    return ret;
+    return fd;
 }
 
 /****************************************************************************
