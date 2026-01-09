@@ -359,8 +359,10 @@ static bool kvdb_client(kvdb_server* server, int fd)
         .tv_sec = 0,
         .tv_usec = CONFIG_KVDB_TIMEOUT_INTERVAL,
     };
-    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
-    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    if (setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) < 0
+        || setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+        KVWARN("Failed to set socket timeout\n");
+    }
 #endif
 
     msg = malloc(PROP_MSG_MAX);
