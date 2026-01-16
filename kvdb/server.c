@@ -68,6 +68,7 @@ static int kvdb_monitor_open(kvdb_server* server, int fd, const char* key,
     /* Malloc monitor element to store [key, fd] pair */
     kvdb_monitor* mon = zalloc(sizeof(kvdb_monitor) + key_len);
     if (mon == NULL) {
+        KVERR("kvdb_monitor_open: zalloc failed\n");
         return -ENOMEM;
     }
 
@@ -78,6 +79,7 @@ static int kvdb_monitor_open(kvdb_server* server, int fd, const char* key,
     };
     int ret = epoll_ctl(server->efd, EPOLL_CTL_ADD, fd, &ev);
     if (ret < 0) {
+        KVERR("kvdb_monitor_open: epoll_ctl failed, ret=%d, errno=%d\n", ret, errno);
         free(mon);
         return ret;
     }
@@ -289,16 +291,22 @@ static int kvdb_bind(int fd[])
 
     for (int i = 0; i < KVFD_COUNT; i++) {
         fd[i] = socket(family[i], SOCK_STREAM | SOCK_CLOEXEC, 0);
-        if (fd[i] < 0)
+        if (fd[i] < 0) {
+            KVERR("kvdb_bind: socket failed, i=%d, errno=%d\n", i, errno);
             continue;
+        }
 
         int ret = bind(fd[i], addr[i], addrlen[i]);
-        if (ret < 0)
+        if (ret < 0) {
+            KVERR("kvdb_bind: bind failed, i=%d, ret=%d, errno=%d\n", i, ret, errno);
             return ret;
+        }
 
         ret = listen(fd[i], CONFIG_KVDB_BACKLOG_CONNS);
-        if (ret < 0)
+        if (ret < 0) {
+            KVERR("kvdb_bind: listen failed, i=%d, ret=%d, errno=%d\n", i, ret, errno);
             return ret;
+        }
     }
 
     return 0;
@@ -338,10 +346,14 @@ static ssize_t kvdb_recv(int sockfd, char* buf, size_t offset, size_t len)
 {
     while (offset < len) {
         ssize_t ret = recv(sockfd, buf + offset, len - offset, 0);
-        if (ret < 0)
+        if (ret < 0) {
+            KVERR("kvdb_recv: recv failed, ret=%zd, errno=%d\n", ret, errno);
             return ret;
-        if (ret == 0)
+        }
+        if (ret == 0) {
+            KVERR("kvdb_recv: recv returned 0, connection closed\n");
             return -ENODATA;
+        }
         offset += ret;
     }
 
@@ -367,15 +379,17 @@ static bool kvdb_client(kvdb_server* server, int fd)
 
     msg = malloc(PROP_MSG_MAX);
     if (msg == NULL) {
-        KVERR("malloc failed\n");
+        KVERR("kvdb_client: malloc failed\n");
         goto out;
     }
 
     msg[0] = msg[1] = msg[2] = 0; /* zero the first key bytes */
 
     len = recv(fd, msg, PROP_MSG_MAX, 0);
-    if (len <= 0)
+    if (len <= 0) {
+        KVERR("kvdb_client: recv failed, len=%zd, errno=%d\n", len, errno);
         goto out;
+    }
 
     switch (msg[0]) {
     case 'D': {
@@ -508,6 +522,7 @@ static bool kvdb_client(kvdb_server* server, int fd)
     }
     case 'E': {
         int ret = 0;
+        KVERR("kvdb_client: received exit command, stopping server\n");
         server->running = false;
         kvdb_uninit(server->kvdb);
         send(fd, &ret, sizeof(ret), 0);
@@ -527,14 +542,17 @@ static void kvdb_loop(kvdb_server* server)
     struct timespec ts;
 
     server->efd = epoll_create(KVFD_MAX);
-    if (server->efd < 0)
+    if (server->efd < 0) {
+        KVERR("kvdb_loop: epoll_create failed, errno=%d\n", errno);
         return;
+    }
 
     for (int i = 0; i < KVFD_COUNT; i++) {
         if (server->fd[i] >= 0) {
             evs[0].data.ptr = &server->fd[i];
             evs[0].events = EPOLLIN;
             if (epoll_ctl(server->efd, EPOLL_CTL_ADD, server->fd[i], &evs[0]) < 0) {
+                KVERR("kvdb_loop: epoll_ctl ADD failed, fd=%d, errno=%d\n", server->fd[i], errno);
                 close(server->efd);
                 return;
             }
@@ -588,6 +606,7 @@ static void kvdb_loop(kvdb_server* server)
             }
         }
     }
+    KVERR("kvdb_loop: server loop exited, running=%d\n", server->running);
 }
 
 /****************************************************************************
@@ -611,16 +630,21 @@ int main(int argc, char* argv[])
         .head = LIST_HEAD_INITIALIZER(),
     };
     int ret = kvdb_bind(server.fd);
-    if (ret < 0)
+    if (ret < 0) {
+        KVERR("main: kvdb_bind failed, ret=%d, errno=%d\n", ret, errno);
         goto out;
+    }
 
     ret = kvdb_init(&server.kvdb);
-    if (ret < 0)
+    if (ret < 0) {
+        KVERR("main: kvdb_init failed, ret=%d\n", ret);
         goto out;
+    }
 
     kvdb_load(server.kvdb, CONFIG_KVDB_SOURCE_PATH, false);
     kvdb_loop(&server);
 out:
+    KVERR("main: exiting, ret=%d\n", ret);
     kvdb_unbind(server.fd);
     return -ret;
 }
