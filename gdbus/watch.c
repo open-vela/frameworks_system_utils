@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <execinfo.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -211,8 +212,9 @@ static gboolean remove_match(struct filter_data* data)
 
     dbus_bus_remove_match(data->connection, rule, &err);
     if (dbus_error_is_set(&err)) {
-        error("Removing owner match rule for %s failed: %s",
+        error("GDBUS Removing owner match rule for %s failed: %s",
             rule, err.message);
+        dump_stack();
         dbus_error_free(&err);
         return FALSE;
     }
