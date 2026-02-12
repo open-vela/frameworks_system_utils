@@ -89,15 +89,6 @@ static int property_connect_one(const struct sockaddr* addr,
     if (fd < 0)
         return -errno;
 
-#if defined(CONFIG_KVDB_TIMEOUT_INTERVAL) && CONFIG_KVDB_TIMEOUT_INTERVAL > 0
-    struct timeval timeout = {
-        .tv_sec = 0,
-        .tv_usec = CONFIG_KVDB_TIMEOUT_INTERVAL,
-    };
-    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
-    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-#endif
-
     int ret = connect(fd, addr, addrlen);
     if (ret < 0) {
         ret = -errno;
@@ -107,6 +98,36 @@ static int property_connect_one(const struct sockaddr* addr,
 
     return fd;
 }
+
+#if defined(CONFIG_NET_LOCAL) && defined(CONFIG_NET_RPMSG)
+/****************************************************************************
+ * Name: use_local_socket
+ *
+ * Description:
+ *   Determine whether to use local socket or rpmsg socket to
+ *   connect to server
+ *
+ * Returned Value:
+ *  true: use local socket
+ *  false: use rpmsg socket
+ *
+ ****************************************************************************/
+
+static inline bool use_local_socket(void)
+{
+#ifdef CONFIG_KVDB_SERVER_CPUNAME
+    struct sockaddr_rpmsg addr;
+    socklen_t addrlen = sizeof(addr);
+    int fd = socket(AF_RPMSG, SOCK_STREAM | SOCK_CLOEXEC, 0);
+    if (fd >= 0) {
+        getsockname(fd, (struct sockaddr*)&addr, &addrlen);
+        close(fd);
+        return strcmp(addr.rp_cpu, CONFIG_KVDB_SERVER_CPUNAME) == 0;
+    }
+#endif
+    return true;
+}
+#endif
 
 /****************************************************************************
  * Name: property_connect
@@ -122,7 +143,6 @@ static int property_connect_one(const struct sockaddr* addr,
 
 static int property_connect(void)
 {
-    int ret;
 #ifdef CONFIG_NET_LOCAL
     const struct sockaddr_un laddr = {
         .sun_family = AF_UNIX,
@@ -137,31 +157,26 @@ static int property_connect(void)
         .rp_cpu = CONFIG_KVDB_SERVER_CPUNAME,
     };
 #endif
-
-    const struct sockaddr* addr[] = {
-#ifdef CONFIG_NET_LOCAL
-        (const struct sockaddr*)&laddr,
+    int ret = -ENOTSUP;
+#if defined(CONFIG_NET_LOCAL) && defined(CONFIG_NET_RPMSG)
+    bool use_local = use_local_socket();
 #endif
-#ifdef CONFIG_NET_RPMSG
-        (const struct sockaddr*)&raddr,
-#endif
-    };
-
-    socklen_t socklen[] = {
-#ifdef CONFIG_NET_LOCAL
-        sizeof(laddr),
-#endif
-#ifdef CONFIG_NET_RPMSG
-        sizeof(raddr),
-#endif
-    };
 
     while (1) {
-        for (size_t i = 0; i < sizeof(addr) / sizeof(addr[0]); i++) {
-            ret = property_connect_one(addr[i], socklen[i]);
-            if (ret >= 0)
-                return ret;
-        }
+#if defined(CONFIG_NET_LOCAL) && defined(CONFIG_NET_RPMSG)
+        if (use_local)
+            ret = property_connect_one((const struct sockaddr*)&laddr, sizeof(laddr));
+        else
+            ret = property_connect_one((const struct sockaddr*)&raddr, sizeof(raddr));
+#elif defined(CONFIG_NET_LOCAL)
+        ret = property_connect_one((const struct sockaddr*)&laddr, sizeof(laddr));
+#elif defined(CONFIG_NET_RPMSG)
+        ret = property_connect_one((const struct sockaddr*)&raddr, sizeof(raddr));
+#else
+        break;
+#endif
+        if (ret >= 0)
+            break;
 
         usleep(1000);
     }

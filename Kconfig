@@ -120,7 +120,7 @@ config KVDB_COMMIT_INTERVAL
 config KVDB_BACKLOG_CONNS
 	int "backlog connections"
 	depends on KVDB_SERVER
-	default 32
+	default 256
 
 if KVDB_DIRECT || KVDB_SERVER
 
