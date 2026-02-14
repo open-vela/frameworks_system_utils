@@ -82,6 +82,7 @@ static ssize_t recv_safe(int sockfd, char* buf, size_t offset, size_t len)
  *
  ****************************************************************************/
 
+#if defined(CONFIG_NET_LOCAL) || defined(CONFIG_NET_RPMSG)
 static int property_connect_one(const struct sockaddr* addr,
     socklen_t addrlen)
 {
@@ -98,6 +99,7 @@ static int property_connect_one(const struct sockaddr* addr,
 
     return fd;
 }
+#endif
 
 #if defined(CONFIG_NET_LOCAL) && defined(CONFIG_NET_RPMSG)
 /****************************************************************************
