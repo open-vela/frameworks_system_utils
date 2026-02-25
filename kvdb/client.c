@@ -122,9 +122,11 @@ static inline bool use_local_socket(void)
     socklen_t addrlen = sizeof(addr);
     int fd = socket(AF_RPMSG, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if (fd >= 0) {
-        getsockname(fd, (struct sockaddr*)&addr, &addrlen);
+        int ret = getsockname(fd, (struct sockaddr*)&addr, &addrlen);
         close(fd);
-        return strcmp(addr.rp_cpu, CONFIG_KVDB_SERVER_CPUNAME) == 0;
+        if (ret == 0) {
+            return strcmp(addr.rp_cpu, CONFIG_KVDB_SERVER_CPUNAME) == 0;
+        }
     }
 #endif
     return true;
