@@ -230,18 +230,18 @@ again:
         return fd;
     }
 
-    /*-------------------------------------*
-     | 1 |   1   |   1   | key_len |val_len|
-     |-------------------------------------|
-     |'S'|key_len|val_len|[key'\0']|[value]|
-     *-------------------------------------*/
+    /*---------------------------------------------*
+     | 1 |   1   |     2     | key_len |  val_len  |
+     |---------------------------------------------|
+     |'S'|key_len|val_len(LE)|[key'\0']|  [value]  |
+     *---------------------------------------------*/
 
-    char cmd[3] = {
-        'S', key_len, val_len
+    char cmd[4] = {
+        'S', key_len, val_len & 0xff, (val_len >> 8) & 0xff
     };
 
     struct iovec iov[3] = {
-        { .iov_base = cmd, .iov_len = 3 },
+        { .iov_base = cmd, .iov_len = 4 },
         { .iov_base = (char*)key, .iov_len = key_len },
         { .iov_base = (char*)value, .iov_len = val_len },
     };
@@ -321,18 +321,18 @@ ssize_t property_get_binary(const char* key, void* value, size_t val_len)
         return fd;
     }
 
-    /*-----------------------------*
-     | 1 |   1   | key_len |val_len|
-     | --------------------|-------|
-     |'G'|key_len|[key'\0']|[value]|
-     *-----------------------------*/
+    /*-----------------------------------------*
+     | 1 |   1   |     2     | key_len |val_len|
+     | ----------------------------------------|
+     |'G'|key_len|val_len(LE)|[key'\0']|[value]|
+     *-----------------------------------------*/
 
-    char cmd[3] = {
-        'G', key_len, val_len
+    char cmd[4] = {
+        'G', key_len, val_len & 0xff, (val_len >> 8) & 0xff
     };
 
     struct iovec iov[2] = {
-        { .iov_base = cmd, .iov_len = 3 },
+        { .iov_base = cmd, .iov_len = 4 },
         { .iov_base = (char*)key, .iov_len = key_len },
     };
 
@@ -513,42 +513,42 @@ int property_list_binary(void (*propfn)(const char* key, const void* value, size
     }
 
     while (1) {
-        /*---------------------------------*
-         |   1   |   1   | key_len |val_len|
-         |---------------------------------|
-         |key_len|val_len|[key'\0']|[value]|
-         *---------------------------------*/
+        /*-------------------------------------------*
+         |   1   |     2     | key_len |  val_len  |
+         |-------------------------------------------|
+         |key_len|val_len(LE)|[key'\0']|  [value]  |
+         *-------------------------------------------*/
 
-        ret = recv_safe(fd, msg, 0, 2);
+        ret = recv_safe(fd, msg, 0, 3);
         if (ret < 0) {
             ret = -errno;
             KVERR("recv_safe failed, ret=%d\n", ret);
             goto out;
         }
 
-        if (msg[0] == 0 && msg[1] == 0) {
+        size_t key_len = (unsigned char)msg[0];
+        if (key_len == 0) {
             /* end of list */
             ret = 0;
             break;
         }
 
-        size_t key_len = (unsigned char)msg[0];
         if (key_len > PROP_NAME_MAX)
             continue;
 
-        size_t val_len = (unsigned char)msg[1];
+        size_t val_len = (unsigned char)msg[1] | ((unsigned char)msg[2] << 8);
         if (val_len >= PROP_VALUE_MAX)
             continue;
 
-        size_t total = key_len + val_len + 2;
-        ret = recv_safe(fd, msg, 2, total);
+        size_t total = key_len + val_len + 3;
+        ret = recv_safe(fd, msg, 3, total);
         if (ret < 0) {
             KVERR("recv_safe failed, ret=%d\n", ret);
             break;
         }
 
-        const char* key = msg + 2;
-        void* value = msg + 2 + key_len;
+        const char* key = msg + 3;
+        void* value = msg + 3 + key_len;
         if (key[key_len - 1])
             continue;
 
@@ -718,8 +718,8 @@ ssize_t property_monitor_read(int fd, char* newkey, void* newvalue, size_t val_l
         return -ENOMEM;
     }
 
-    ssize_t ret = recv(fd, msg, 2, 0);
-    if (ret < 2) {
+    ssize_t ret = recv(fd, msg, 3, 0);
+    if (ret < 3) {
         KVERR("recv failed, ret=%d, errno=%d\n", ret, errno);
         free(msg);
         return ret < 0 ? -errno : -ENODATA;
@@ -731,13 +731,13 @@ ssize_t property_monitor_read(int fd, char* newkey, void* newvalue, size_t val_l
         return -E2BIG;
     }
 
-    size_t len = (unsigned char)msg[1];
+    size_t len = (unsigned char)msg[1] | ((unsigned char)msg[2] << 8);
     if (len > PROP_VALUE_MAX) {
         free(msg);
         return -E2BIG;
     }
 
-    size_t total = key_len + len + 2;
+    size_t total = key_len + len + 3;
     ret = recv_safe(fd, msg, ret, total);
     if (ret < 0) {
         KVERR("recv_safe failed, ret=%d\n", ret);
@@ -745,18 +745,18 @@ ssize_t property_monitor_read(int fd, char* newkey, void* newvalue, size_t val_l
         return ret;
     }
 
-    const char* key = &msg[2];
+    const char* key = &msg[3];
     if (newkey != NULL)
         strlcpy(newkey, key, PROP_NAME_MAX);
 
     if (newvalue != NULL) {
-        /*--------------------------------*
-         |   1   |   1   | key_len |val_len|
-         |---------------------------------|
-         |key_len|val_len|[key'\0']|[value]|
-         *---------------------------------*/
+        /*-------------------------------------------*
+         |   1   |     2     | key_len |  val_len  |
+         |-------------------------------------------|
+         |key_len|val_len(LE)|[key'\0']|  [value]  |
+         *-------------------------------------------*/
 
-        const void* value = &msg[2 + key_len];
+        const void* value = &msg[3 + key_len];
         len = val_len > len ? len : val_len;
         memcpy(newvalue, value, len);
     }

@@ -20,7 +20,7 @@
 #include <cutils/properties.h>
 #include <sys/types.h>
 
-#define PROP_MSG_MAX (3 + PROP_NAME_MAX + PROP_VALUE_MAX) /* +3 = +1(opcode) +2(len) */
+#define PROP_MSG_MAX (4 + PROP_NAME_MAX + PROP_VALUE_MAX) /* +4 = +1(opcode) +1(key_len) +2(val_len) */
 
 #if defined(__cplusplus)
 extern "C" {

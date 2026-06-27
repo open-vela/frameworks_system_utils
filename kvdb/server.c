@@ -114,21 +114,21 @@ static void kvdb_monitor_notify(kvdb_server* server, const char* key, const void
     size_t key_len = strlen(key) + 1;
 
     /* value != NULL
-      *---------------------------------*
-      |   1   |   1   | key_len |val_len|
-      |---------------------------------|
-      |key_len|val_len|[key'\0']|[value]|
-      *---------------------------------*
+      *-------------------------------------------*
+      |   1   |     2     | key_len |  val_len  |
+      |-------------------------------------------|
+      |key_len|val_len(LE)|[key'\0']|  [value]  |
+      *-------------------------------------------*
       * value == NULL
-      *-------------------------*
-      |   1   |   1   | key_len |
-      |-------------------------|
-      |key_len|   0   |[key'\0']|
-      *-------------------------*/
+      *-----------------------------*
+      |   1   |     2     | key_len |
+      |-----------------------------|
+      |key_len|     0     |[key'\0']|
+      *-----------------------------*/
 
-    char cmd[2] = { key_len, val_len };
+    char cmd[3] = { key_len, val_len & 0xff, (val_len >> 8) & 0xff };
     struct iovec iov[3] = {
-        { .iov_base = cmd, .iov_len = 2 },
+        { .iov_base = cmd, .iov_len = 3 },
         { .iov_base = (char*)key, .iov_len = key_len },
         { .iov_base = (char*)value, .iov_len = val_len },
     };
@@ -146,7 +146,7 @@ static void kvdb_monitor_notify(kvdb_server* server, const char* key, const void
 
         int space;
         ioctl(mon->fd, FIONSPACE, &space);
-        if (space < (key_len + val_len + 2)) {
+        if (space < (key_len + val_len + 3)) {
             /* Check space before monitor notify to avoid deadlock.
                Cause the send may write buffer full and wait,
                then the client just get a new key and also wait,
@@ -323,12 +323,12 @@ static void kvdb_unbind(int fd[])
 static void kvdb_list_consume(const char* key, const void* value, size_t val_len, void* cookie)
 {
     size_t key_len = strlen(key) + 1;
-    char cmd[2] = {
-        key_len, val_len
+    char cmd[3] = {
+        key_len, val_len & 0xff, (val_len >> 8) & 0xff
     };
 
     struct iovec iov[3] = {
-        { .iov_base = cmd, .iov_len = 2 },
+        { .iov_base = cmd, .iov_len = 3 },
         { .iov_base = (char*)key, .iov_len = key_len },
         { .iov_base = (char*)value, .iov_len = val_len },
     };
@@ -383,7 +383,7 @@ static bool kvdb_client(kvdb_server* server, int fd)
         goto out;
     }
 
-    msg[0] = msg[1] = msg[2] = 0; /* zero the first key bytes */
+    msg[0] = msg[1] = msg[2] = msg[3] = 0; /* zero the first header bytes */
 
     len = recv(fd, msg, PROP_MSG_MAX, 0);
     if (len <= 0) {
@@ -416,19 +416,21 @@ static bool kvdb_client(kvdb_server* server, int fd)
         break;
     }
     case 'G': {
-        if (len < 3)
-            len = kvdb_recv(fd, msg, len, 3);
+        if (len < 4)
+            len = kvdb_recv(fd, msg, len, 4);
         if (len < 0)
             goto out;
 
         size_t key_len = (unsigned char)msg[1];
-        size_t val_len = (unsigned char)msg[2];
-        size_t end_pos = key_len + 3;
+        size_t val_len = (unsigned char)msg[2] | ((unsigned char)msg[3] << 8);
+        size_t end_pos = key_len + 4;
         if (end_pos >= PROP_MSG_MAX)
             break;
 
-        const char* key = msg + 3;
+        const char* key = msg + 4;
         char value[PROP_VALUE_MAX];
+        if (val_len > PROP_VALUE_MAX)
+            val_len = PROP_VALUE_MAX;
         len = kvdb_recv(fd, msg, len, end_pos);
         if (len > 0) {
             len = kvdb_get(server->kvdb, key, key_len, value, val_len);
@@ -438,18 +440,18 @@ static bool kvdb_client(kvdb_server* server, int fd)
         break;
     }
     case 'S': {
-        if (len < 3)
-            len = kvdb_recv(fd, msg, len, 3);
+        if (len < 4)
+            len = kvdb_recv(fd, msg, len, 4);
         if (len < 0)
             goto out;
 
         size_t key_len = (unsigned char)msg[1];
-        size_t val_len = (unsigned char)msg[2];
-        size_t end_pos = key_len + val_len + 3;
+        size_t val_len = (unsigned char)msg[2] | ((unsigned char)msg[3] << 8);
+        size_t end_pos = key_len + val_len + 4;
         if (end_pos >= PROP_MSG_MAX)
             break;
 
-        const char* key = msg + 3;
+        const char* key = msg + 4;
         const char* value = key + key_len;
         len = kvdb_recv(fd, msg, len, end_pos);
         if (len > 0) {
@@ -465,7 +467,7 @@ static bool kvdb_client(kvdb_server* server, int fd)
 #ifdef CONFIG_KVDB_DUMPLIST
     case 'L': {
         kvdb_list(server->kvdb, kvdb_list_consume, (void*)(uintptr_t)fd);
-        send(fd, "\0", 2, 0); /* terminator */
+        send(fd, "\0\0", 3, 0); /* terminator: key_len=0 + 2-byte val_len=0 */
         break;
     }
 #endif

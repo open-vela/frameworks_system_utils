@@ -39,7 +39,7 @@ extern "C" {
 
 typedef struct prop_info prop_info;
 
-#define PROP_VALUE_MAX  255
+#define PROP_VALUE_MAX  1024
 
 /*
  * Sets system property `name` to `value`, creating it if it doesn't exist.
